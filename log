@@ -1,0 +1,82 @@
+[1;36m[2025-05-08 14:20:06] Starting execution of src/server/indexing/pipeline.test.py[0m
+^CTraceback (most recent call last):
+  File [35m"/Users/minhyeok/Documents/d[Develop] Dev/attenz-ai/attenz-ai/src/server/indexing/pipeline.test.py"[0m, line [35m16[0m, in [35m<module>[0m
+    [31mtest_pipeline[0m[1;31m()[0m
+    [31m~~~~~~~~~~~~~[0m[1;31m^^[0m
+  File [35m"/Users/minhyeok/Documents/d[Develop] Dev/attenz-ai/attenz-ai/src/server/indexing/pipeline.test.py"[0m, line [35m12[0m, in [35mtest_pipeline[0m
+    [31mpipeline[0m[1;31m(args.project_id, args.video_id)[0m
+    [31m~~~~~~~~[0m[1;31m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+  File [35m"/Users/minhyeok/Documents/d[Develop] Dev/attenz-ai/attenz-ai/src/server/indexing/pipeline.py"[0m, line [35m47[0m, in [35mpipeline[0m
+    transcription = ai_repository.whisper(remote_link)
+  File [35m"/Users/minhyeok/Documents/d[Develop] Dev/attenz-ai/attenz-ai/src/server/ai_adapter/ai_repository.py"[0m, line [35m9[0m, in [35mwhisper[0m
+    return [31mself.replicate.whisper[0m[1;31m(audio_url)[0m
+           [31m~~~~~~~~~~~~~~~~~~~~~~[0m[1;31m^^^^^^^^^^^[0m
+  File [35m"/Users/minhyeok/Documents/d[Develop] Dev/attenz-ai/attenz-ai/src/server/ai_adapter/replicate_repository.py"[0m, line [35m11[0m, in [35mwhisper[0m
+    output = self.replicate.run(
+        "openai/whisper:4d50797290df275329f202e48c76360b3f22b08d28c196cbc54600319435f8d2",
+    ...<3 lines>...
+        },
+    )
+  File [35m"/Users/minhyeok/Documents/d[Develop] Dev/attenz-ai/attenz-ai/.venv/lib/python3.13/site-packages/replicate/client.py"[0m, line [35m175[0m, in [35mrun[0m
+    return run(self, ref, input, use_file_output=use_file_output, **params)
+  File [35m"/Users/minhyeok/Documents/d[Develop] Dev/attenz-ai/attenz-ai/.venv/lib/python3.13/site-packages/replicate/run.py"[0m, line [35m46[0m, in [35mrun[0m
+    prediction = client.predictions.create(
+        version=version_id, input=input or {}, **params
+    )
+  File [35m"/Users/minhyeok/Documents/d[Develop] Dev/attenz-ai/attenz-ai/.venv/lib/python3.13/site-packages/replicate/prediction.py"[0m, line [35m497[0m, in [35mcreate[0m
+    resp = self._client._request("POST", "/v1/predictions", json=body, **extras)
+  File [35m"/Users/minhyeok/Documents/d[Develop] Dev/attenz-ai/attenz-ai/.venv/lib/python3.13/site-packages/replicate/client.py"[0m, line [35m88[0m, in [35m_request[0m
+    resp = self._client.request(method, path, **kwargs)
+  File [35m"/Users/minhyeok/Documents/d[Develop] Dev/attenz-ai/attenz-ai/.venv/lib/python3.13/site-packages/httpx/_client.py"[0m, line [35m825[0m, in [35mrequest[0m
+    return [31mself.send[0m[1;31m(request, auth=auth, follow_redirects=follow_redirects)[0m
+           [31m~~~~~~~~~[0m[1;31m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+  File [35m"/Users/minhyeok/Documents/d[Develop] Dev/attenz-ai/attenz-ai/.venv/lib/python3.13/site-packages/httpx/_client.py"[0m, line [35m914[0m, in [35msend[0m
+    response = self._send_handling_auth(
+        request,
+    ...<2 lines>...
+        history=[],
+    )
+  File [35m"/Users/minhyeok/Documents/d[Develop] Dev/attenz-ai/attenz-ai/.venv/lib/python3.13/site-packages/httpx/_client.py"[0m, line [35m942[0m, in [35m_send_handling_auth[0m
+    response = self._send_handling_redirects(
+        request,
+        follow_redirects=follow_redirects,
+        history=history,
+    )
+  File [35m"/Users/minhyeok/Documents/d[Develop] Dev/attenz-ai/attenz-ai/.venv/lib/python3.13/site-packages/httpx/_client.py"[0m, line [35m979[0m, in [35m_send_handling_redirects[0m
+    response = self._send_single_request(request)
+  File [35m"/Users/minhyeok/Documents/d[Develop] Dev/attenz-ai/attenz-ai/.venv/lib/python3.13/site-packages/httpx/_client.py"[0m, line [35m1014[0m, in [35m_send_single_request[0m
+    response = transport.handle_request(request)
+  File [35m"/Users/minhyeok/Documents/d[Develop] Dev/attenz-ai/attenz-ai/.venv/lib/python3.13/site-packages/replicate/client.py"[0m, line [35m293[0m, in [35mhandle_request[0m
+    response = self._wrapped_transport.handle_request(request)  # type: ignore
+  File [35m"/Users/minhyeok/Documents/d[Develop] Dev/attenz-ai/attenz-ai/.venv/lib/python3.13/site-packages/httpx/_transports/default.py"[0m, line [35m250[0m, in [35mhandle_request[0m
+    resp = self._pool.handle_request(req)
+  File [35m"/Users/minhyeok/Documents/d[Develop] Dev/attenz-ai/attenz-ai/.venv/lib/python3.13/site-packages/httpcore/_sync/connection_pool.py"[0m, line [35m256[0m, in [35mhandle_request[0m
+    raise exc from None
+  File [35m"/Users/minhyeok/Documents/d[Develop] Dev/attenz-ai/attenz-ai/.venv/lib/python3.13/site-packages/httpcore/_sync/connection_pool.py"[0m, line [35m236[0m, in [35mhandle_request[0m
+    response = connection.handle_request(
+        pool_request.request
+    )
+  File [35m"/Users/minhyeok/Documents/d[Develop] Dev/attenz-ai/attenz-ai/.venv/lib/python3.13/site-packages/httpcore/_sync/connection.py"[0m, line [35m103[0m, in [35mhandle_request[0m
+    return [31mself._connection.handle_request[0m[1;31m(request)[0m
+           [31m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m[1;31m^^^^^^^^^[0m
+  File [35m"/Users/minhyeok/Documents/d[Develop] Dev/attenz-ai/attenz-ai/.venv/lib/python3.13/site-packages/httpcore/_sync/http11.py"[0m, line [35m136[0m, in [35mhandle_request[0m
+    raise exc
+  File [35m"/Users/minhyeok/Documents/d[Develop] Dev/attenz-ai/attenz-ai/.venv/lib/python3.13/site-packages/httpcore/_sync/http11.py"[0m, line [35m106[0m, in [35mhandle_request[0m
+    ) = [31mself._receive_response_headers[0m[1;31m(**kwargs)[0m
+        [31m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m[1;31m^^^^^^^^^^[0m
+  File [35m"/Users/minhyeok/Documents/d[Develop] Dev/attenz-ai/attenz-ai/.venv/lib/python3.13/site-packages/httpcore/_sync/http11.py"[0m, line [35m177[0m, in [35m_receive_response_headers[0m
+    event = self._receive_event(timeout=timeout)
+  File [35m"/Users/minhyeok/Documents/d[Develop] Dev/attenz-ai/attenz-ai/.venv/lib/python3.13/site-packages/httpcore/_sync/http11.py"[0m, line [35m217[0m, in [35m_receive_event[0m
+    data = self._network_stream.read(
+        self.READ_NUM_BYTES, timeout=timeout
+    )
+  File [35m"/Users/minhyeok/Documents/d[Develop] Dev/attenz-ai/attenz-ai/.venv/lib/python3.13/site-packages/httpcore/_backends/sync.py"[0m, line [35m128[0m, in [35mread[0m
+    return [31mself._sock.recv[0m[1;31m(max_bytes)[0m
+           [31m~~~~~~~~~~~~~~~[0m[1;31m^^^^^^^^^^^[0m
+  File [35m"/opt/homebrew/Cellar/python@3.13/3.13.2/Frameworks/Python.framework/Versions/3.13/lib/python3.13/ssl.py"[0m, line [35m1285[0m, in [35mrecv[0m
+    return [31mself.read[0m[1;31m(buflen)[0m
+           [31m~~~~~~~~~[0m[1;31m^^^^^^^^[0m
+  File [35m"/opt/homebrew/Cellar/python@3.13/3.13.2/Frameworks/Python.framework/Versions/3.13/lib/python3.13/ssl.py"[0m, line [35m1140[0m, in [35mread[0m
+    return [31mself._sslobj.read[0m[1;31m(len)[0m
+           [31m~~~~~~~~~~~~~~~~~[0m[1;31m^^^^^[0m
+[1;35mKeyboardInterrupt[0m

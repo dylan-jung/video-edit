@@ -1,0 +1,23 @@
+{
+  "filename": "IMG_8016.MOV",
+  "file_size": 20343384,
+  "path": "data/IMG_8016.MOV",
+  "creation_time": "2025-04-28T11:01:33.000000Z",
+  "format": "mov,mp4,m4a,3gp,3g2,mj2",
+  "duration": 18.5667,
+  "bit_rate": 8765535,
+  "major_brand": "qt  ",
+  "minor_version": "0",
+  "compatible_brands": "qt  ",
+  "com.apple.quicktime.location.accuracy.horizontal": "22.935987",
+  "com.apple.quicktime.full-frame-rate-playback-intent": "0",
+  "com.apple.quicktime.location.iso6709": "+37.5831+127.0608+047.429/",
+  "com.apple.quicktime.make": "Apple",
+  "com.apple.quicktime.model": "iPhone 13 mini",
+  "com.apple.quicktime.software": "18.3.2",
+  "com.apple.quicktime.creationdate": "2025-04-28T20:01:33+0900",
+  "width": 1920,
+  "height": 1080,
+  "codec": "hevc",
+  "fps": 30.0
+}

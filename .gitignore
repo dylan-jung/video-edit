@@ -1,0 +1,26 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Ignore all files in the keyframes directory
+keyframes/*
+
+# Ignore all videos
+*.mp4
+*.MP4
+*.avi
+*.AVI
+*.mov
+*.MOV
+*.flv
+*.FLV
+
+gcp-service-key.json
+projects

@@ -1,0 +1,32 @@
+#!/bin/bash
+
+# Get the script path from the first argument
+SCRIPT_PATH=$1
+shift # Remove the script path from arguments
+
+# Ensure terminal supports colors
+export PYTHONIOENCODING=utf-8
+export PYTHONUNBUFFERED=1
+export FORCE_COLOR=1
+
+# Set log format with timestamps
+LOG_DATE_FORMAT=$(date '+%Y-%m-%d %H:%M:%S')
+echo -e "\033[1;36m[$LOG_DATE_FORMAT] Starting execution of $SCRIPT_PATH\033[0m"
+
+# Run the script with remaining arguments and ensure logs/errors are displayed with colors preserved
+script -q /dev/null uv run --env-file .env python "$SCRIPT_PATH" "$@" | while IFS= read -r line; do
+  echo -e "$line"
+done
+
+# Capture exit status
+EXIT_CODE=${PIPESTATUS[0]}
+LOG_END_TIME=$(date '+%Y-%m-%d %H:%M:%S')
+
+# Display exit status with color
+if [ $EXIT_CODE -eq 0 ]; then
+  echo -e "\033[1;32m[$LOG_END_TIME] Command completed successfully with exit code $EXIT_CODE\033[0m"
+else
+  echo -e "\033[1;31m[$LOG_END_TIME] Command failed with exit code $EXIT_CODE\033[0m" >&2
+fi
+
+exit $EXIT_CODE
