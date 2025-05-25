@@ -3,6 +3,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 from io import BytesIO
 from typing import Dict, List, Optional, Tuple
 
@@ -14,16 +15,14 @@ from prompt.scene_describer import sys_prompt
 from qwen_vl_utils import process_vision_info
 
 from src.server.utils.cache_manager import get_cache_path, get_file_id
+from src.server.utils.cookie_utils import get_code_server_cookies
 
 # TODO: Code server 세션 쿠키 때문에 만들어 둠
-cookies = httpx.Cookies()
-cookies.set("code-server-session",
-            """%24argon2id%24v%3D19%24m%3D65536%2Ct%3D3%2Cp%3D4%24PH%2B%2FvHn4uG3JWvs5wWFSWQ%24Sl2b696Jv%2FO528n5NVQlakXBkt5MTfV8ODf8HiZAww0""",
-            domain=".1a40432.tunnel.myubai.uos.ac.kr",
-            path="/")
+cookies = get_code_server_cookies()
 
 httpx_client = httpx.Client(
     cookies=cookies,
+    timeout=180.0
 )
 
 def split_scenes(video_path: str, scenes: List[Dict], ffmpeg_path: str = "ffmpeg") -> List[str]:
@@ -32,7 +31,7 @@ def split_scenes(video_path: str, scenes: List[Dict], ffmpeg_path: str = "ffmpeg
 
     Args:
         video_path: Path to the input video file
-        scenes: List of (start_time, end_time) tuples in seconds
+        scenes: List of (start_time, end_time) tuples in seconds or "HH:MM:SS" format
         output_dir: Directory to save extracted scenes
         use_cache: Whether to use cached scenes if available
         ffmpeg_path: Path to ffmpeg executable
@@ -58,6 +57,9 @@ def split_scenes(video_path: str, scenes: List[Dict], ffmpeg_path: str = "ffmpeg
         for i, item in enumerate(scenes, 1):
             s = item["start_time"]
             e = item["end_time"]
+            
+            # Use time values directly - they can be either seconds (float) or "HH:MM:SS" (string)
+            # ffmpeg accepts both formats
             out = os.path.join(output_dir, f"{base}_scene{i:03d}.mp4")
             scene_paths.append(out)
             cmd = [ffmpeg_path, '-y', '-ss', str(s), '-to', str(e),
@@ -117,96 +119,83 @@ def prepare_message_for_vllm(content_messages):
 
     return vllm_messages, {'fps': fps_list}
 
-
-def describe_scene(video_path: str,
-                   start_time: float,
-                   end_time: float,
-                   model: str = "Qwen/Qwen2.5-VL-7B-Instruct",
-                   use_cache: bool = True) -> Dict:
+def seconds_to_hh_mm_ss(seconds: float) -> str:
     """
-    Uses OpenAI API to describe the content of a video scene.
+    Convert seconds to HH:MM:SS format.
+    
+    Args:
+        seconds: Time in seconds
+        
+    Returns:
+        String in HH:MM:SS format
+    """
+    hours = int(seconds // 3600)
+    minutes = int((seconds % 3600) // 60)
+    seconds = int(seconds % 60)
+    return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+
+def describe_scene_v2(video_path: str, start_time: float, end_time: float, model: str = "Qwen/Qwen2.5-VL-7B-Instruct", use_cache: bool = True) -> Dict:
+    """
+    Uses the VISION API endpoint to describe the content of a video scene.
+    This function has the same interface as describe_scene but sends a POST request to the VISION API endpoint.
 
     Args:
         video_path: Path to the video scene file
-        model: Model to use for description
-        use_cache: Whether to use cached descriptions
+        start_time: Start time of the scene in seconds or "HH:MM:SS" format
+        end_time: End time of the scene in seconds or "HH:MM:SS" format
+        model: Model to use for description (not used in this version)
+        use_cache: Whether to use cached descriptions (not used in this version)
 
     Returns:
         Dictionary containing the scene description and metadata
     """
-    # Check cache first
-
-    cache_args = {"model": model}
-    cache_exists, cache_path = get_cache_path(video_path, cache_args)
-
-    if use_cache and cache_exists:
-        print(f"Using cached description: {cache_path}")
-        try:
-            with open(cache_path, 'r') as f:
-                return json.load(f)
-        except (json.JSONDecodeError, IOError):
-            print(f"Error reading cache, regenerating description")
-
-    # Create OpenAI client
+    retry_count = 0
+    
     api_url = os.getenv("VISION_API_URL")
     api_key = os.getenv("VISION_API_KEY")
-    client = OpenAI(base_url=api_url, api_key=api_key, http_client=httpx_client)
-    
-    try:
-        # Read the video file and convert to base64
-        total_pixels = 20480 * 28 * 28
-        min_pixels = 16 * 28 * 28
-        max_tokens = 2048
 
-        messages = [
+    print(api_url)
+    endpoint = f"{api_url}/chat"
+
+    headers = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+
+    messages = [
             {"role": "system", "content": sys_prompt},
             {"role": "user", "content": [
                 {"type": "text", "text": "Please describe this video scene in detail."},
-                {"type": "video", "video": video_path, "total_pixels": total_pixels,
-                    "min_pixels": min_pixels},
+                {"type": "video", "video": video_path},
             ]
-            }
-        ]
-
-        vllm_messages, video_kwargs = prepare_message_for_vllm(messages)
-
-        # Print the request details
-        response = client.chat.completions.create(
-            model=model,
-            messages=vllm_messages,
-            max_tokens=max_tokens,
-            extra_body={
-                "mm_processor_kwargs": video_kwargs
-            }
-        )
-
-        # Extract description from response
-        description = response.choices[0].message.content
-        try:
-            description = json.loads(description)
-        except json.JSONDecodeError:
-            print(f"Failed to parse description: {description}")
-            raise Exception(f"Failed to parse description: {description}")
-
-        # Create response object
-        description_data = {
-            "video_id": get_file_id(video_path),
-            "description": description,
-            "start_time": start_time,
-            "end_time": end_time,
-            "timestamp": response.created
         }
+    ]
 
-        # Save to cache
-        if use_cache:
-            os.makedirs(os.path.dirname(cache_path), exist_ok=True)
-            with open(cache_path, 'w') as f:
-                json.dump(description_data, f)
+    payload = {"messages": messages}
 
-        return description_data
+    while retry_count < 3:
+        response = httpx_client.post(endpoint, headers=headers, json=payload)
+        response.raise_for_status()
+        result = response.json()
+        try:
+            description = json.loads(result['response'])
+        except json.JSONDecodeError:
+            print(f"Failed to parse description: {result['response']}")
+            continue
+        break
 
-    except Exception as e:
-        raise e
+    # Convert time to hh:mm:ss format if it's a float (seconds)
+    start_time_formatted = seconds_to_hh_mm_ss(start_time) if isinstance(start_time, (int, float)) else start_time
+    end_time_formatted = seconds_to_hh_mm_ss(end_time) if isinstance(end_time, (int, float)) else end_time
+
+    # Create response object
+    description_data = {
+        "description": description,
+        "start_time": start_time_formatted,
+        "end_time": end_time_formatted,
+        # "timestamp": result.get("created", None)
+    }
+
+    return description_data
 
 def sample_video_fps(input_path: str, target_fps: float = 1.0, use_cache: bool = True) -> None:
         """
@@ -233,7 +222,8 @@ def sample_video_fps(input_path: str, target_fps: float = 1.0, use_cache: bool =
         ]
         subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return cache_path
-def process_video_scenes(video_path: str, scenes: List[Dict],
+
+def divide_scenes(video_path: str, scenes: List[Dict],
                          use_cache: bool = True) -> List[Dict]:
     """
     Process a video by splitting it into scenes and describing each scene.
@@ -251,12 +241,26 @@ def process_video_scenes(video_path: str, scenes: List[Dict],
 
     # Split video into scenes
     scene_paths = split_scenes(sampled_path, scenes)
+    return scene_paths
 
+
+def describe_scenes(scene_paths: List[str], scenes: List[Dict], use_cache: bool = True) -> List[Dict]:
+    """
+    Describe each scene in the given list of scene paths.
+    
+    Args:
+        scene_paths: List of paths to scene video files
+        scenes: List of dictionaries with start_time and end_time (in seconds or "HH:MM:SS" format)
+        use_cache: Whether to use cached descriptions
+        
+    Returns:
+        List of dictionaries containing scene descriptions
+    """
     # Describe each scene
     scene_descriptions = []
     for scene_path, scene in zip(scene_paths, scenes):
         print(f"Describing scene {scene_path}")
-        description = describe_scene(scene_path, scene["start_time"], scene["end_time"], use_cache=use_cache)
+        description = describe_scene_v2(scene_path, scene["start_time"], scene["end_time"], use_cache=use_cache)
         scene_descriptions.append(description)
 
     return scene_descriptions
