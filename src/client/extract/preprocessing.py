@@ -9,7 +9,7 @@ from .cache_manager import get_cache_path
 
 def resize_and_cache_video(
     video_path,
-    target_size=640,
+    target_size=480,
     text_area_height=16,
     use_cache: bool = True
 ):

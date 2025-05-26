@@ -5,20 +5,6 @@ import tempfile
 # Create a temporary directory for cache
 CACHE_DIR = tempfile.gettempdir()
 
-def get_video_id(video_path: str) -> str:
-    """
-    Create a unique video ID based on the video path.
-    """
-    sample_size = 64 * 1024  # 64KB
-    try:
-        with open(video_path, 'rb') as f:
-            file_sample = f.read(sample_size)
-    except (IOError, FileNotFoundError):
-        # Fallback to path-based hash if file can't be read
-        file_sample = os.path.abspath(video_path).encode('utf-8')
-    
-    return hashlib.sha256(file_sample).hexdigest()[:16]
-
 def get_cache_path(video_path: str, extension: str, args: dict) -> tuple[bool, str]:
     """
     Generate a cache path for a resized video based on sample of its content and target size.

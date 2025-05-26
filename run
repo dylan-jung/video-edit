@@ -14,7 +14,7 @@ LOG_DATE_FORMAT=$(date '+%Y-%m-%d %H:%M:%S')
 echo -e "\033[1;36m[$LOG_DATE_FORMAT] Starting execution of $SCRIPT_PATH\033[0m"
 
 # Run the script with remaining arguments and ensure logs/errors are displayed with colors preserved
-script -q /dev/null uv run --env-file .env python "$SCRIPT_PATH" "$@" | while IFS= read -r line; do
+script -q /dev/null uv run --env-file .env.local python "$SCRIPT_PATH" "$@" | while IFS= read -r line; do
   echo -e "$line"
 done
 

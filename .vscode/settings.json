@@ -11,5 +11,7 @@
   },
   "cSpell.enabledSchemes": {
     "file": false
-  }
+  },
+  "python.envFile": ""
+  // "python.terminal.activateEnvironment": false
 }

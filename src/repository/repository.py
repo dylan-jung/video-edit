@@ -29,3 +29,7 @@ class Repository(ABC):
     @abstractmethod
     def get_video_video(self, project_id: str, video_id: str) -> bytes:
         pass
+
+    @abstractmethod
+    def list_videos(self, project_id: str) -> list[str]:
+        pass

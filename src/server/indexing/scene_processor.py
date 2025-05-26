@@ -1,18 +1,20 @@
 import base64
+import glob
 import json
 import os
 import subprocess
 import sys
+import tempfile
 import time
 from io import BytesIO
 from typing import Dict, List, Optional, Tuple
 
 import httpx
 import numpy as np
-from openai import OpenAI
+from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_openai import ChatOpenAI
 from PIL import Image
 from prompt.scene_describer import sys_prompt
-from qwen_vl_utils import process_vision_info
 
 from src.server.utils.cache_manager import get_cache_path, get_file_id
 from src.server.utils.cookie_utils import get_code_server_cookies
@@ -75,49 +77,51 @@ def split_scenes(video_path: str, scenes: List[Dict], ffmpeg_path: str = "ffmpeg
             json.dump(scene_paths, f)
         return scene_paths
 
-def prepare_message_for_vllm(content_messages):
+def extract_video_frames(video_path: str, fps: float = 1.0, max_frames: int = 10) -> List[str]:
     """
-    The frame extraction logic for videos in `vLLM` differs from that of `qwen_vl_utils`.
-    Here, we utilize `qwen_vl_utils` to extract video frames, with the `media_typ`e of the video explicitly set to `video/jpeg`.
-    By doing so, vLLM will no longer attempt to extract frames from the input base64-encoded images.
+    Extract frames from video using ffmpeg and return base64 encoded frames.
+    
+    Args:
+        video_path: Path to the video file
+        fps: Frames per second to extract
+        max_frames: Maximum number of frames to extract
+        
+    Returns:
+        List of base64 encoded frame strings
     """
-    vllm_messages, fps_list = [], []
-    for message in content_messages:
-        message_content_list = message["content"]
-        if not isinstance(message_content_list, list):
-            vllm_messages.append(message)
-            continue
-
-        new_content_list = []
-        for part_message in message_content_list:
-            if 'video' in part_message:
-                video_message = [{'content': [part_message]}]
-                image_inputs, video_inputs, video_kwargs = process_vision_info(
-                    video_message, return_video_kwargs=True)
-                assert video_inputs is not None, "video_inputs should not be None"
-                video_input = (video_inputs.pop()).permute(
-                    0, 2, 3, 1).numpy().astype(np.uint8)
-                fps_list.extend(video_kwargs.get('fps', []))
-
-                # encode image with base64
-                base64_frames = []
-                for frame in video_input:
-                    img = Image.fromarray(frame)
-                    output_buffer = BytesIO()
-                    img.save(output_buffer, format="jpeg")
-                    byte_data = output_buffer.getvalue()
-                    base64_str = base64.b64encode(byte_data).decode("utf-8")
+    with tempfile.TemporaryDirectory() as temp_dir:
+        # Extract frames using ffmpeg
+        frame_pattern = os.path.join(temp_dir, "frame_%04d.jpg")
+        cmd = [
+            'ffmpeg', '-y',
+            '-i', video_path,
+            '-vf', f'fps={fps}',
+            '-frames:v', str(max_frames),
+            '-q:v', '2',  # High quality
+            frame_pattern
+        ]
+        
+        result = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if result.returncode != 0:
+            print(f"Error extracting frames from {video_path}")
+            return []
+        
+        # Get all extracted frames
+        frame_files = sorted(glob.glob(os.path.join(temp_dir, "frame_*.jpg")))
+        
+        # Convert frames to base64
+        base64_frames = []
+        for frame_file in frame_files:
+            try:
+                with open(frame_file, 'rb') as f:
+                    frame_data = f.read()
+                    base64_str = base64.b64encode(frame_data).decode('utf-8')
                     base64_frames.append(base64_str)
-
-                part_message = {
-                    "type": "video_url",
-                    "video_url": {"url": f"data:video/jpeg;base64,{','.join(base64_frames)}"}
-                }
-            new_content_list.append(part_message)
-        message["content"] = new_content_list
-        vllm_messages.append(message)
-
-    return vllm_messages, {'fps': fps_list}
+            except Exception as e:
+                print(f"Error processing frame {frame_file}: {e}")
+                continue
+                
+        return base64_frames
 
 def seconds_to_hh_mm_ss(seconds: float) -> str:
     """
@@ -134,54 +138,81 @@ def seconds_to_hh_mm_ss(seconds: float) -> str:
     seconds = int(seconds % 60)
     return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
-def describe_scene_v2(video_path: str, start_time: float, end_time: float, model: str = "Qwen/Qwen2.5-VL-7B-Instruct", use_cache: bool = True) -> Dict:
+def describe_scene_v2(video_path: str, start_time: float, end_time: float, model: str = "gemini-2.5-flash-preview-05-20", use_cache: bool = True) -> Dict:
     """
-    Uses the VISION API endpoint to describe the content of a video scene.
-    This function has the same interface as describe_scene but sends a POST request to the VISION API endpoint.
+    Uses Langchain's ChatOpenAI to describe the content of a video scene.
 
     Args:
         video_path: Path to the video scene file
         start_time: Start time of the scene in seconds or "HH:MM:SS" format
         end_time: End time of the scene in seconds or "HH:MM:SS" format
-        model: Model to use for description (not used in this version)
-        use_cache: Whether to use cached descriptions (not used in this version)
+        model: Model to use for description
+        use_cache: Whether to use cached descriptions
 
     Returns:
         Dictionary containing the scene description and metadata
     """
     retry_count = 0
+    max_retries = 3
     
+    # Initialize Langchain ChatOpenAI client
     api_url = os.getenv("VISION_API_URL")
     api_key = os.getenv("VISION_API_KEY")
-
-    print(api_url)
-    endpoint = f"{api_url}/chat"
-
-    headers = {"Content-Type": "application/json"}
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
-
-    messages = [
-            {"role": "system", "content": sys_prompt},
-            {"role": "user", "content": [
-                {"type": "text", "text": "Please describe this video scene in detail."},
-                {"type": "video", "video": video_path},
-            ]
-        }
+    
+    if not api_url or not api_key:
+        raise ValueError("VISION_API_URL and VISION_API_KEY environment variables must be set")
+    
+    # Extract frames from video
+    base64_frames = extract_video_frames(video_path, fps=1.0, max_frames=8)
+    
+    if not base64_frames:
+        raise ValueError(f"Could not extract frames from video: {video_path}")
+    
+    # Initialize ChatOpenAI with custom base URL
+    llm = ChatOpenAI(
+        model=model,
+        openai_api_base=api_url,
+        openai_api_key=api_key,
+        temperature=0.1
+    )
+    
+    # Prepare messages with video frames
+    content = [
+        {"type": "text", "text": "Please describe this video scene in detail based on the following frames."}
     ]
-
-    payload = {"messages": messages}
-
-    while retry_count < 3:
-        response = httpx_client.post(endpoint, headers=headers, json=payload)
-        response.raise_for_status()
-        result = response.json()
+    
+    # Add frames as images
+    for i, frame_b64 in enumerate(base64_frames):
+        content.append({
+            "type": "image_url",
+            "image_url": {
+                "url": f"data:image/jpeg;base64,{frame_b64}"
+            }
+        })
+    
+    messages = [
+        SystemMessage(content=sys_prompt),
+        HumanMessage(content=content)
+    ]
+    
+    while retry_count < max_retries:
         try:
-            description = json.loads(result['response'])
-        except json.JSONDecodeError:
-            print(f"Failed to parse description: {result['response']}")
-            continue
-        break
+            response = llm.invoke(messages)
+            description_text = response.content
+            
+            # Try to parse as JSON, fallback to plain text
+            try:
+                description = json.loads(description_text)
+            except json.JSONDecodeError:
+                description = {"description": description_text}
+            
+            break
+        except Exception as e:
+            print(f"Error on attempt {retry_count + 1}: {e}")
+            retry_count += 1
+            if retry_count >= max_retries:
+                raise e
+            time.sleep(1)
 
     # Convert time to hh:mm:ss format if it's a float (seconds)
     start_time_formatted = seconds_to_hh_mm_ss(start_time) if isinstance(start_time, (int, float)) else start_time
@@ -197,15 +228,17 @@ def describe_scene_v2(video_path: str, start_time: float, end_time: float, model
 
     return description_data
 
-def sample_video_fps(input_path: str, target_fps: float = 1.0, use_cache: bool = True) -> None:
+def sample_video_fps(input_path: str, target_fps: float = 1.0, use_cache: bool = True) -> str:
         """
         Sample video to reduce size by taking 1 frame per second.
         
         Args:
             input_path: Path to input video
-            output_path: Path to save sampled video
             target_fps: Target frames per second (default: 1.0)
             use_cache: Whether to use cached results
+            
+        Returns:
+            Path to the sampled video file
         """
         hit, cache_path = get_cache_path(input_path, { "target_fps": target_fps })
         if use_cache and hit:

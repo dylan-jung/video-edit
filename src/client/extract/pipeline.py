@@ -2,9 +2,9 @@ import os
 import shutil
 
 from src.repository import CloudStorageRepository, Repository
+from src.utils.get_video_id import get_video_id
 
 from . import preprocessing
-from .cache_manager import get_video_id
 from .scene_divide import detect_scene_boundaries, save_scene_info
 
 

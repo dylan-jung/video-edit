@@ -34,7 +34,7 @@ class SceneAnalyzer:
     4. 클러스터 기반 scene 분할
     """
     
-    def __init__(self, vector_db_path: str = None, model_name: str = "ViT-L-14", device: str = None,
+    def __init__(self, vector_db_path: str = None, model_name: str = "ViT-L-14-336", device: str = None,
                  spatial_eps: float = 35.191, temporal_eps: float = 3.0, min_samples: int = 3):
         """
         Initialize the scene analyzer with CLIP Embeddings and FAISS vector DB
@@ -162,21 +162,6 @@ class SceneAnalyzer:
         
         return embeddings_array
     
-    def find_optimal_clusters(self, embeddings: np.ndarray, max_clusters: int = 20) -> int:
-        """
-        ST-DBSCAN에서는 클러스터 수를 자동으로 결정하므로 이 메서드는 더 이상 사용되지 않음
-        파라미터 튜닝을 위한 참고용으로 유지
-        
-        Args:
-            embeddings: 임베딩 배열
-            max_clusters: 최대 클러스터 수 (사용되지 않음)
-            
-        Returns:
-            더미 값 (ST-DBSCAN에서는 자동으로 클러스터 수 결정)
-        """
-        print("ℹ️  ST-DBSCAN automatically determines the number of clusters")
-        return -1  # ST-DBSCAN에서는 클러스터 수를 미리 지정하지 않음
-    
     def perform_clustering(self, embeddings: np.ndarray, timestamps: np.ndarray, 
                           n_clusters: int = None) -> Tuple[np.ndarray, Optional[np.ndarray]]:
         """
@@ -195,17 +180,18 @@ class SceneAnalyzer:
         # ST-DBSCAN 클러스터링 수행
         cluster_labels = self.st_dbscan_clustering(embeddings, timestamps)
         
-        # 노이즈 포인트 처리
-        cluster_labels = self.handle_noise_points(cluster_labels, timestamps, embeddings)
-        
         # 최종 클러스터링 결과 출력
         unique_labels = np.unique(cluster_labels)
-        n_clusters_final = len(unique_labels)
+        n_clusters_final = len(unique_labels) - (1 if -1 in unique_labels else 0)
+        n_noise = np.sum(cluster_labels == -1)
         
-        print(f"✅ Final clustering completed with {n_clusters_final} clusters")
+        print(f"✅ Final clustering completed with {n_clusters_final} clusters and {n_noise} noise points")
         
         # 클러스터별 프레임 수 출력
         for cluster_id in unique_labels:
+            if cluster_id == -1:
+                print(f"  Noise points: {n_noise} frames")
+                continue
             count = np.sum(cluster_labels == cluster_id)
             cluster_timestamps = timestamps[cluster_labels == cluster_id]
             time_span = cluster_timestamps.max() - cluster_timestamps.min() if count > 1 else 0
@@ -217,6 +203,7 @@ class SceneAnalyzer:
                                     frame_indices: np.ndarray = None) -> List[Dict]:
         """
         클러스터를 기반으로 Scene의 start_time, end_time 설계
+        노이즈 포인트(-1)는 제외하고 처리
         
         Args:
             cluster_labels: 클러스터 라벨 배열
@@ -228,18 +215,27 @@ class SceneAnalyzer:
         if frame_indices is None:
             frame_indices = np.arange(len(cluster_labels))
         
-        print("🔄 Generating scenes from clusters...")
+        print("🔄 Generating scenes from clusters (excluding noise points)...")
+        
+        # 노이즈 포인트(-1) 제외
+        valid_indices = cluster_labels != -1
+        valid_cluster_labels = cluster_labels[valid_indices]
+        valid_frame_indices = frame_indices[valid_indices]
+        
+        if len(valid_cluster_labels) == 0:
+            print("⚠️  All points are noise, no scenes generated")
+            return []
         
         scenes = []
         
         # 연속된 같은 클러스터를 하나의 scene으로 그룹화
-        current_cluster = cluster_labels[0]
-        scene_start = frame_indices[0]
+        current_cluster = valid_cluster_labels[0]
+        scene_start = valid_frame_indices[0]
         
-        for i in range(1, len(cluster_labels)):
-            if cluster_labels[i] != current_cluster:
+        for i in range(1, len(valid_cluster_labels)):
+            if valid_cluster_labels[i] != current_cluster:
                 # 이전 scene 종료
-                scene_end = frame_indices[i - 1]
+                scene_end = valid_frame_indices[i - 1]
                 scenes.append({
                     "start_time": float(scene_start),  # 초 단위
                     "end_time": float(scene_end + 1),  # 다음 초까지 포함
@@ -247,21 +243,18 @@ class SceneAnalyzer:
                 })
                 
                 # 새로운 scene 시작
-                current_cluster = cluster_labels[i]
-                scene_start = frame_indices[i]
+                current_cluster = valid_cluster_labels[i]
+                scene_start = valid_frame_indices[i]
         
         # 마지막 scene 추가
-        scene_end = frame_indices[-1]
+        scene_end = valid_frame_indices[-1]
         scenes.append({
             "start_time": float(scene_start),
             "end_time": float(scene_end + 1),
             "cluster_id": int(current_cluster)
         })
         
-        # 너무 짧은 scene들을 인접한 scene과 병합
-        scenes = self._merge_short_scenes(scenes, min_duration=2.0)
-        
-        print(f"✅ Generated {len(scenes)} scenes from clusters")
+        print(f"✅ Generated {len(scenes)} scenes from clusters (noise points excluded)")
         
         # 생성된 scene 정보 출력
         for i, scene in enumerate(scenes, 1):
@@ -270,41 +263,6 @@ class SceneAnalyzer:
                   f"(duration: {duration:.1f}s, cluster: {scene['cluster_id']})")
         
         return scenes
-    
-    def _merge_short_scenes(self, scenes: List[Dict], min_duration: float = 2.0) -> List[Dict]:
-        """
-        너무 짧은 scene들을 인접한 scene과 병합
-        
-        Args:
-            scenes: scene 리스트
-            min_duration: 최소 scene 길이 (초)
-            
-        Returns:
-            병합된 scene 리스트
-        """
-        if len(scenes) <= 1:
-            return scenes
-        
-        print(f"🔄 Merging short scenes (min duration: {min_duration}s)...")
-        
-        merged_scenes = []
-        i = 0
-        
-        while i < len(scenes):
-            current_scene = scenes[i].copy()
-            duration = current_scene["end_time"] - current_scene["start_time"]
-            
-            # 짧은 scene인 경우 다음 scene과 병합
-            if duration < min_duration and i < len(scenes) - 1:
-                next_scene = scenes[i + 1]
-                current_scene["end_time"] = next_scene["end_time"]
-                print(f"  Merged scene {i+1} and {i+2} (durations: {duration:.1f}s + {next_scene['end_time'] - next_scene['start_time']:.1f}s)")
-                i += 1  # 다음 scene도 처리했으므로 건너뛰기
-            
-            merged_scenes.append(current_scene)
-            i += 1
-        
-        return merged_scenes
     
     def search_similar_frames(self, query_embedding: np.ndarray, top_k: int = 5, 
                              threshold: float = 0.7, video_path: str = None) -> List[Tuple[Dict, float]]:
@@ -409,7 +367,7 @@ class SceneAnalyzer:
                 if knee.knee is not None:
                     knee_eps = float(k_dists[knee.knee])
                     print(f"🔍 k‑distance elbow knee detected → εₛ≈{knee_eps:.3f} "
-                          f"(k={k_val}, suggest try ~{knee_eps*1.1:.3f})")
+                          f"(k={k_val}, suggest try ~{knee_eps*1.2:.3f})")
                 else:
                     print("⚠️  KneeLocator could not find an elbow; inspect k‑distance plot manually.")
             else:
@@ -470,70 +428,10 @@ class SceneAnalyzer:
         # ------------------------------------------------
         
         return cluster_labels
-    
-    def handle_noise_points(self, cluster_labels: np.ndarray, timestamps: np.ndarray, 
-                           embeddings: np.ndarray) -> np.ndarray:
-        """
-        노이즈 포인트를 가장 가까운 클러스터에 할당
-        
-        Args:
-            cluster_labels: 클러스터 라벨 배열
-            timestamps: 타임스탬프 배열
-            embeddings: 임베딩 배열
-            
-        Returns:
-            수정된 클러스터 라벨 배열
-        """
-        noise_indices = np.where(cluster_labels == -1)[0]
-        if len(noise_indices) == 0:
-            return cluster_labels
-        
-        print(f"🔄 Handling {len(noise_indices)} noise points...")
-        
-        modified_labels = cluster_labels.copy()
-        unique_clusters = np.unique(cluster_labels[cluster_labels != -1])
-        
-        if len(unique_clusters) == 0:
-            # 모든 포인트가 노이즈인 경우, 시간 순서대로 단일 클러스터로 할당
-            modified_labels[:] = 0
-            return modified_labels
-        
-        for noise_idx in noise_indices:
-            noise_time = timestamps[noise_idx]
-            noise_embedding = embeddings[noise_idx]
-            
-            best_cluster = -1
-            best_score = float('inf')
-            
-            # 각 클러스터와의 거리 계산 (시간적 + 공간적)
-            for cluster_id in unique_clusters:
-                cluster_indices = np.where(cluster_labels == cluster_id)[0]
-                cluster_times = timestamps[cluster_indices]
-                cluster_embeddings = embeddings[cluster_indices]
-                
-                # 시간적 거리 (가장 가까운 프레임과의 시간 차이)
-                temporal_distances = np.abs(cluster_times - noise_time)
-                min_temporal_dist = np.min(temporal_distances)
-                
-                # 공간적 거리 (가장 가까운 프레임과의 임베딩 거리)
-                spatial_distances = np.linalg.norm(cluster_embeddings - noise_embedding, axis=1)
-                min_spatial_dist = np.min(spatial_distances)
-                
-                # 복합 거리 점수 (시간적 + 공간적)
-                combined_score = min_temporal_dist / self.temporal_eps + min_spatial_dist / self.spatial_eps
-                
-                if combined_score < best_score:
-                    best_score = combined_score
-                    best_cluster = cluster_id
-            
-            modified_labels[noise_idx] = best_cluster
-        
-        print(f"✅ Assigned all noise points to nearest clusters")
-        return modified_labels
 
 
 def analyze_video_scenes_clustering(video_path: str, use_cache: bool = True, 
-                                   vector_db_path: str = None, model_name: str = "ViT-L-14", device: str = None,
+                                   vector_db_path: str = None, model_name: str = "ViT-H-14", device: str = None,
                                    spatial_eps: float = 31.992, temporal_eps: float = 3.0, min_samples: int = 3) -> List[Dict]:
     """
     ST-DBSCAN 기반 비디오 scene 분석 함수 (시공간 클러스터링)
@@ -552,5 +450,5 @@ def analyze_video_scenes_clustering(video_path: str, use_cache: bool = True,
         List of scene dictionaries with start_time, end_time, cluster_id
     """
     analyzer = SceneAnalyzer(vector_db_path=vector_db_path, model_name=model_name, device=device,
-                           spatial_eps=spatial_eps, temporal_eps=temporal_eps, min_samples=min_samples)
+                           spatial_eps=35.3904, temporal_eps=temporal_eps, min_samples=min_samples)
     return analyzer.analyze_video_scenes(video_path, use_cache) 

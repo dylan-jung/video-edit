@@ -11,6 +11,5 @@ def test_pipeline():
 
     pipeline(args.project_id, args.video_id)
 
-
 if __name__ == "__main__":
     test_pipeline()
