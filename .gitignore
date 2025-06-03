@@ -27,3 +27,4 @@ projects
 
 .env.local
 .env.*
+.env.local
