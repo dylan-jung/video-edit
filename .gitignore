@@ -24,3 +24,6 @@ keyframes/*
 
 gcp-service-key.json
 projects
+
+.env.local
+.env.*
