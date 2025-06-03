@@ -28,3 +28,6 @@ projects
 .env.local
 .env.*
 .env.local
+
+*.json
+*.txt
