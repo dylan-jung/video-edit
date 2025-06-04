@@ -1,4 +1,7 @@
+from functools import partial
 from typing import Any, Dict, List
+
+from langchain_core.tools import Tool
 
 from src.server.agent.tools.read_transcription_overview_tool import \
     ReadVideoTranscriptionOverviewTool
@@ -44,7 +47,34 @@ class ToolExecutor:
         except Exception as e:
             return f"Error executing tool {tool_name}: {str(e)}"
 
-    def as_tool(self) -> List[Dict[str, Any]]:
-        return [tool.as_tool() for tool in self.tools_dict.values()]
+    def _make_tool_func(self, tool_name: str):
+        """Create a wrapper function for a specific tool."""
+        def tool_func(**kwargs) -> str:
+            return self.execute_tool({"name": tool_name, "arguments": kwargs})
+        tool_func.__name__ = tool_name
+        return tool_func
+
+    def as_tool(self) -> List[Tool]:
+        """Return LangChain Tool objects instead of dictionaries."""
+        langchain_tools = []
+        
+        for tool in available_tools:
+            tool_dict = tool.as_tool()
+            tool_name = tool_dict["function"]["name"]
+            tool_description = tool_dict["function"]["description"]
+            
+            # Create a wrapper function for this specific tool
+            tool_func = self._make_tool_func(tool_name)
+            
+            # Create LangChain Tool object
+            langchain_tool = Tool(
+                name=tool_name,
+                description=tool_description,
+                func=tool_func
+            )
+            
+            langchain_tools.append(langchain_tool)
+        
+        return langchain_tools
 
 __all__ = ["ToolExecutor"]
