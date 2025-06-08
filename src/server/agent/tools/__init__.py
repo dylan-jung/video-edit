@@ -1,26 +1,31 @@
 from functools import partial
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Union
 
-from langchain_core.tools import Tool
+from langchain_core.tools import StructuredTool, Tool
 
+from src.server.agent.config import PROJECT_ID
 from src.server.agent.tools.read_transcription_overview_tool import \
     ReadVideoTranscriptionOverviewTool
+from src.server.agent.tools.read_video_tool import ReadVideoTool
 
 from .list_videos_tool import ListVideosTool
 from .read_editing_state_tool import ReadEditingStateTool
 from .read_metadata_tool import ReadVideoMetadataTool
 from .read_scene_descriptions_tool import ReadVideoSceneDescriptionsTool
 from .read_transcription_tool import ReadVideoTranscriptionTool
-from .write_project import WriteProjectTool
+from .sementic_vision_search_tool import SementicVisionSearchTool
+from .write_editing_state_tool import WriteEditingStateTool
 
 available_tools = [
     ListVideosTool(),
     ReadVideoMetadataTool(),
     ReadEditingStateTool(),
-    ReadVideoSceneDescriptionsTool(),
-    ReadVideoTranscriptionOverviewTool(),
+    WriteEditingStateTool(),
+    # ReadVideoSceneDescriptionsTool(),
+    # ReadVideoTranscriptionOverviewTool(),
     ReadVideoTranscriptionTool(),
-    # WriteProjectTool()
+    SementicVisionSearchTool(),
+    # ReadVideoTool(),
 ]
 
 class ToolExecutor:
@@ -31,13 +36,14 @@ class ToolExecutor:
         self.tools_dict = {}
 
         for tool in available_tools:
-            tool_name = tool.__class__.name
+            tool_name = tool.name
             self.tools_dict[tool_name] = tool
+            print(f"✅ Registered tool: {tool_name}")
 
     def execute_tool(self, tool_call: Dict[str, Any]) -> str:
         """Execute a tool based on a tool call."""
         tool_name: str = tool_call["name"]
-        tool_args: Dict[str, Any] = tool_call.get("arguments", {})
+        tool_args: Dict[str, Any] = tool_call.get("parameters", {})
         
         if tool_name not in self.tools_dict:
             return f"Tool {tool_name} not found."
@@ -47,34 +53,8 @@ class ToolExecutor:
         except Exception as e:
             return f"Error executing tool {tool_name}: {str(e)}"
 
-    def _make_tool_func(self, tool_name: str):
-        """Create a wrapper function for a specific tool."""
-        def tool_func(**kwargs) -> str:
-            return self.execute_tool({"name": tool_name, "arguments": kwargs})
-        tool_func.__name__ = tool_name
-        return tool_func
-
-    def as_tool(self) -> List[Tool]:
-        """Return LangChain Tool objects instead of dictionaries."""
-        langchain_tools = []
-        
-        for tool in available_tools:
-            tool_dict = tool.as_tool()
-            tool_name = tool_dict["function"]["name"]
-            tool_description = tool_dict["function"]["description"]
-            
-            # Create a wrapper function for this specific tool
-            tool_func = self._make_tool_func(tool_name)
-            
-            # Create LangChain Tool object
-            langchain_tool = Tool(
-                name=tool_name,
-                description=tool_description,
-                func=tool_func
-            )
-            
-            langchain_tools.append(langchain_tool)
-        
-        return langchain_tools
+    def as_tool(self) -> List[Union[Tool, StructuredTool]]:
+        """Return LangChain Tool objects."""
+        return [tool.as_tool() for tool in available_tools]
 
 __all__ = ["ToolExecutor"]

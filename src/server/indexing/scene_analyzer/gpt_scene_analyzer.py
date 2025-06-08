@@ -9,43 +9,9 @@ from langchain_openai import ChatOpenAI
 
 from src.server.indexing.prompt.scene_base import scene_base_prompt
 from src.server.indexing.prompt.scene_describer import scene_describer_prompt
-
-
-def extract_frames_from_video(video_path: str) -> List[str]:
-    """
-    Extract frames from video and convert to base64 encoded strings.
-    
-    Args:
-        video_path: Path to the video file
-        sample_rate: Extract every nth frame (default: 30, roughly 1 frame per second for 30fps video)
-    
-    Returns:
-        List of base64 encoded frame strings
-    """
-    video = cv2.VideoCapture(video_path)
-    
-    if not video.isOpened():
-        raise ValueError(f"비디오 파일을 열 수 없습니다: {video_path}")
-    
-    base64_frames = []
-    frame_count = 0
-    
-    while video.isOpened():
-        success, frame = video.read()
-        if not success:
-            break
-            
-        # Encode frame to JPEG
-        _, buffer = cv2.imencode(".jpg", frame)
-        # Convert to base64
-        base64_frame = base64.b64encode(buffer).decode("utf-8")
-        base64_frames.append(base64_frame)
-        
-        frame_count += 1
-    
-    video.release()
-    print(f"{len(base64_frames)} 프레임을 추출했습니다.")
-    return base64_frames
+from src.server.indexing.prompt.scene_merger import scene_merger_prompt
+from src.server.utils.video_control import (extract_frames_from_video,
+                                            extract_video_chunk_frames)
 
 
 def init_gpt_model(model_name: str = "gpt-4o", temperature: float = 0.1) -> ChatOpenAI:
@@ -69,10 +35,11 @@ def init_gpt_model(model_name: str = "gpt-4o", temperature: float = 0.1) -> Chat
         model=model_name,
         temperature=temperature,
         max_tokens=10000,
+        max_retries=5,
         api_key=os.environ["OPENAI_API_KEY"]
     )
 
-def create_message_with_frames(base64_frames: List[str], prompt: str, chunk_index: int) -> HumanMessage:
+def create_message_with_frames(base64_frames: List[str], prompt: str) -> HumanMessage:
     """
     Create a message with frames for GPT analysis.
     
@@ -85,8 +52,6 @@ def create_message_with_frames(base64_frames: List[str], prompt: str, chunk_inde
     """
     # Create the text prompt
     prompt_text = f"""
-    이 동영상은 전체 동영상을 나눈 청크 중 {chunk_index + 1}번째 청크입니다.
-    
     {prompt}
     """
     
@@ -135,10 +100,8 @@ def analyze_video_with_gpt(video_path: str, chunk_index: int, model_name: str = 
         
         messages = [
             SystemMessage(content=scene_base_prompt),
-            create_message_with_frames(base64_frames, "먼저 비슷한 장면을 찾아 묶어주세요.", chunk_index)
+            create_message_with_frames(base64_frames, f"이 동영상은 전체 동영상을 나눈 청크 중 {chunk_index + 1}번째 청크입니다. 먼저 비슷한 장면을 찾아 묶어주세요.")
         ]
-        # # Create message with frames
-        # message = create_message_with_frames(base64_frames, chunk_index)
         
         # Send request to GPT
         print(f"청크 {chunk_index} GPT 분석 중...")
@@ -174,3 +137,109 @@ def analyze_video_with_gpt(video_path: str, chunk_index: int, model_name: str = 
     except Exception as e:
         print(f"청크 {chunk_index} 분석 중 오류 발생: {str(e)}")
         raise
+
+def _merge_scenes(analysis_results: List[Dict[str, Any]], responses: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Merge scenes across video chunks based on boundary analysis.
+    
+    Args:
+        analysis_results: List of analysis results for each chunk
+        responses: List of boundary comparison results between chunks
+    
+    Returns:
+        List of merged scenes
+    """
+    if not analysis_results:
+        return []
+    
+    merged_scenes = []
+    
+    # 첫 번째 청크의 모든 씬을 시작점으로 추가 (마지막 씬 제외)
+    for scene in analysis_results[0][:-1]:
+        merged_scenes.append(scene.copy())
+    
+    # 각 청크 경계를 처리
+    for i in range(len(analysis_results) - 1):
+        current_chunk_last_scene = analysis_results[i][-1]  # 현재 청크의 마지막 씬
+        next_chunk_first_scene = analysis_results[i + 1][0]  # 다음 청크의 첫 번째 씬
+        
+        # 경계 씬이 같은지 판단
+        is_same_scene = False
+        if i < len(responses):
+            response = responses[i]
+            is_same_scene = response.get('is_same_scene', False)
+        
+        if is_same_scene:
+            # 씬을 병합: 현재 청크의 마지막 씬과 다음 청크의 첫 번째 씬을 합침
+            merged_scene = response.get("merged_scene", None)
+            if merged_scene is None:
+                raise ValueError(f"병합된 씬이 없습니다: {response}")
+            
+            # 병합된 씬 추가
+            merged_scenes.append(merged_scene)
+            
+            # 다음 청크의 나머지 씬들 추가 (첫 번째 씬 제외, 마지막 씬은 조건부)
+            next_scenes = analysis_results[i + 1][1:]
+            if i == len(analysis_results) - 2:  # 마지막 청크인 경우 모든 씬 추가
+                for scene in next_scenes:
+                    merged_scenes.append(scene.copy())
+            else:  # 마지막 청크가 아닌 경우 마지막 씬 제외
+                for scene in next_scenes[:-1]:
+                    merged_scenes.append(scene.copy())
+        else:
+            # 씬을 병합하지 않음: 각각 별도 씬으로 추가
+            merged_scenes.append(current_chunk_last_scene.copy())
+            
+            # 다음 청크의 씬들 추가
+            next_scenes = analysis_results[i + 1]
+            if i == len(analysis_results) - 2:  # 마지막 청크인 경우 모든 씬 추가
+                for scene in next_scenes:
+                    merged_scenes.append(scene.copy())
+            else:  # 마지막 청크가 아닌 경우 마지막 씬 제외
+                for scene in next_scenes[:-1]:
+                    merged_scenes.append(scene.copy())
+    
+    # 마지막 청크가 하나뿐인 경우 처리
+    if len(analysis_results) == 1:
+        for scene in analysis_results[0]:
+            merged_scenes.append(scene.copy())
+    
+    return merged_scenes
+
+def merge_scenes(video_path: str, analysis_results: List[Dict[str, Any]], chunk_duration: int = 300, fps: int = 1, model_name: str = "gpt-4o") -> List[Dict[str, Any]]:
+    """
+    Merge scenes from analysis results.
+    """
+    model = init_gpt_model(model_name=model_name)
+    responses = []
+
+    for i, this_analysis in enumerate(analysis_results):
+        if i == len(analysis_results) - 1:
+            continue
+        
+        boundary_time = chunk_duration * (i + 1)
+        next_analysis = analysis_results[i + 1]
+
+        this_base64_frames = extract_video_chunk_frames(video_path, boundary_time - 3, boundary_time, fps)
+        next_base64_frames = extract_video_chunk_frames(video_path, boundary_time, boundary_time + 3, fps)
+        
+        this_prompt = f"다음은 AI가 분석한 씬의 내용입니다:\n{json.dumps(this_analysis[-1], ensure_ascii=False)}\n\n또한 적절한 판단을 위해 영상의 일부분을 첨부합니다."
+        next_prompt = f"다음은 AI가 분석한 씬의 내용입니다:\n{json.dumps(next_analysis[0], ensure_ascii=False)}\n\n또한 적절한 판단을 위해 영상의 일부분을 첨부합니다."
+
+        messages = [
+            SystemMessage(content=scene_merger_prompt),
+            create_message_with_frames(this_base64_frames, this_prompt),
+            create_message_with_frames(next_base64_frames, next_prompt),
+            HumanMessage(content="이제 이 두 씬이 같은 씬인지 판단해주세요.")
+        ]
+
+        response = model.invoke(messages)
+        if "```json" in response.content:
+            json_part = response.content.split("```json")[1].split("```")[0].strip()
+        else:
+            json_part = response.content
+        response_json = json.loads(json_part)
+        responses.append(response_json)
+
+    merged_scenes = _merge_scenes(analysis_results, responses)
+    return merged_scenes

@@ -1,6 +1,8 @@
 import json
 from typing import Any, Dict, Union
 
+from langchain_core.tools import Tool
+
 from src.repository.cloud_storage_repository import CloudStorageRepository
 from src.repository.repository import Repository
 from src.server.agent.config import PROJECT_ID
@@ -13,20 +15,14 @@ class ReadVideoSceneDescriptionsTool:
     """
     name = "read_video_scene_descriptions"
     description = (
-        "Return scene descriptions (as JSON) for a video.",
-        "scene_descriptions is a JSON file that contains scene descriptions information. this file has information about the video's scenes, including the start and end time of each scene.",
-        "Output: scene_descriptions (as JSON)"
+        "Read scene descriptions for a specific video. "
+        "Returns detailed scene-by-scene analysis as JSON, including visual descriptions, "
+        "timestamps (start and end times), scene transitions, key objects, actions, "
+        "and contextual information for each scene. This data is crucial for understanding "
+        "video content structure and planning editing decisions. "
+        "Input: video_id (str) - the id of the video to read scene descriptions from "
+        "Output: scene_descriptions (JSON) - the scene descriptions of the video"
     )
-    parameters = {
-        "type": "object",
-        "properties": {
-            "video_id": {
-                "type": "string",
-                "description": "the id of the video file"
-            }
-        },
-        "required": ["video_id"]
-    }
     
     def __init__(self):
         self.repository: Repository = CloudStorageRepository()
@@ -37,14 +33,15 @@ class ReadVideoSceneDescriptionsTool:
 
         return json.dumps(scene_descriptions, ensure_ascii=False)
         
-    @staticmethod
-    def as_tool() -> Dict[str, Any]:
+    def as_tool(self) -> Tool:
         """Convert the tool to a LangGraph-compatible tool format."""
-        return {
-            "type": "function",
-            "function": {
-                "name": ReadVideoSceneDescriptionsTool.name,
-                "description": "\n".join(ReadVideoSceneDescriptionsTool.description),
-                "parameters": ReadVideoSceneDescriptionsTool.parameters
-            }
-        }
+        def tool_func(*args, **kwargs) -> str:
+            # LangChain이 video_id를 args[0]이나 kwargs에서 전달할 수 있음
+            video_id = args[0] if args else kwargs.get('video_id', '')
+            return self.call(video_id)
+        
+        return Tool(
+            name=self.name,
+            description=self.description,
+            func=tool_func
+        )

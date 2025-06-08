@@ -21,7 +21,7 @@ def pipeline(project_id: str, video_path: str):
     processed_video_path, processed_audio_path, metadata_path = preprocessing.process_video_and_audio(
         video_path,
         noise_reduction=True,
-        target_size=480,
+        target_size=240,
         extract_metadata=True,
         use_cache=not debug
     )
@@ -37,18 +37,18 @@ def pipeline(project_id: str, video_path: str):
         print("✅ Debug files copied")
 
     # Scene division
-    scenes = detect_scene_boundaries(
-        processed_video_path, visualize=False, auto_threshold=True, min_scene_length=2.0, max_threshold=0.95)
-    scene_info_path = save_scene_info(processed_video_path, scenes, cache=True)
-    print("✅ Scene division done")
+    # scenes = detect_scene_boundaries(
+    #     processed_video_path, visualize=False, auto_threshold=True, min_scene_length=2.0, max_threshold=0.95)
+    # scene_info_path = save_scene_info(processed_video_path, scenes, cache=True)
+    # print("✅ Scene division done")
 
     # Upload to repository
     if not repository.file_exists(project_id, video_id, 'metadata.json'):
         repository.push_file(
             project_id, video_id, metadata_path, 'metadata.json')
-    if not repository.file_exists(project_id, video_id, 'scenes.json'):
-        repository.push_file(
-            project_id, video_id, scene_info_path, 'scenes.json')
+    # if not repository.file_exists(project_id, video_id, 'scenes.json'):
+    #     repository.push_file(
+    #         project_id, video_id, scene_info_path, 'scenes.json')
     if not repository.file_exists(project_id, video_id, 'video.mp4'):
         repository.push_file(
             project_id, video_id, processed_video_path, 'video.mp4')

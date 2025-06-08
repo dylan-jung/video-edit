@@ -64,4 +64,28 @@ class CloudStorageRepository(Repository):
         blob = self.bucket.blob(f"{project_id}/{video_id}/transcription.json")
         return blob.download_as_bytes()
     
+    def read_file(self, file_path: str) -> bytes:
+        """Read a file from the storage."""
+        blob = self.bucket.blob(file_path)
+        if not blob.exists():
+            raise FileNotFoundError(f"File not found: {file_path}")
+        return blob.download_as_bytes()
+
+    def write_file(self, file_path: str, content: bytes) -> None:
+        """Write content to a file in the storage."""
+        blob = self.bucket.blob(file_path)
+        blob.upload_from_string(content)
+
+    def get_editing_state(self, project_id: str) -> bytes:
+        """Get the editing state for a project."""
+        blob = self.bucket.blob(f"projects/{project_id}/editing_state.json")
+        if not blob.exists():
+            raise FileNotFoundError(f"Editing state not found for project: {project_id}")
+        return blob.download_as_bytes()
+
+    def save_editing_state(self, project_id: str, state_data: bytes) -> None:
+        """Save the editing state for a project."""
+        blob = self.bucket.blob(f"projects/{project_id}/editing_state.json")
+        blob.upload_from_string(state_data)
+    
     

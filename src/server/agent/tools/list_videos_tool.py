@@ -1,7 +1,10 @@
 import json
 from typing import Any, Dict
 
+from langchain_core.tools import Tool
+
 from src.repository.cloud_storage_repository import CloudStorageRepository
+from src.server.agent.config import PROJECT_ID
 
 
 class ListVideosTool:
@@ -10,35 +13,28 @@ class ListVideosTool:
     """
     name = "list_videos"
     description = (
-        "Reads the video IDs of all videos in the project.",
+        "List all video IDs in the current project. "
+        "This tool retrieves the identifiers of all videos that belong to the project. "
+        "These video IDs can be used with other tools to access specific video data "
+        "such as metadata, transcriptions, or scene descriptions. "
+        "Input: none "
         "Output: video_ids (list[str]) - the ids of the videos in the project"
     )
-    parameters = {
-        "type": "object",
-        "properties": {
-            "project_id": {
-                "type": "string",
-                "description": "the id of the project"
-            }
-        },
-        "required": ["project_id"]
-    }
-
+    
     def __init__(self):
         self.repository = CloudStorageRepository()
 
-    def call(self, project_id: str) -> str:
-        video_ids = self.repository.list_videos(project_id)
+    def call(self) -> str:
+        video_ids = self.repository.list_videos(PROJECT_ID)
         print(f"video_ids: {video_ids}")
         return json.dumps(video_ids, ensure_ascii=False)
 
-    @staticmethod
-    def as_tool() -> Dict[str, Any]:
-        return {
-            "type": "function",
-            "function": {
-                "name": ListVideosTool.name,
-                "description": "\n".join(ListVideosTool.description),
-                "parameters": ListVideosTool.parameters
-            }
-        }
+    def as_tool(self) -> Tool:
+        def tool_func(*args, **kwargs) -> str:
+            return self.call()
+        
+        return Tool(
+            name=self.name,
+            description=self.description,
+            func=tool_func
+        )

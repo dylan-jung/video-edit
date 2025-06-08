@@ -23,6 +23,10 @@ class Repository(ABC):
         pass
 
     @abstractmethod
+    def get_video_scene_descriptions(self, project_id: str, video_id: str) -> bytes:
+        pass
+
+    @abstractmethod
     def get_video_audio(self, project_id: str, video_id: str) -> bytes:
         pass
 
@@ -31,5 +35,29 @@ class Repository(ABC):
         pass
 
     @abstractmethod
+    def get_video_transcription(self, project_id: str, video_id: str) -> bytes:
+        pass
+
+    @abstractmethod
     def list_videos(self, project_id: str) -> list[str]:
+        pass
+
+    @abstractmethod
+    def read_file(self, file_path: str) -> bytes:
+        """Read a file from the storage."""
+        pass
+
+    @abstractmethod
+    def write_file(self, file_path: str, content: bytes) -> None:
+        """Write content to a file in the storage."""
+        pass
+
+    @abstractmethod
+    def get_editing_state(self, project_id: str) -> bytes:
+        """Get the editing state for a project."""
+        pass
+
+    @abstractmethod
+    def save_editing_state(self, project_id: str, state_data: bytes) -> None:
+        """Save the editing state for a project."""
         pass

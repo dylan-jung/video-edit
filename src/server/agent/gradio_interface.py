@@ -19,10 +19,53 @@ from src.server.agent.tools import *
 class AgentInterface:
     def __init__(self):
         """Initialize the agent interface with workflow and message history."""
-        self.agent_graph = create_agent_workflow(AgentState)
+        print("🔄 Initializing Agent Interface...")
+        try:
+            self.agent_graph = create_agent_workflow(AgentState)
+            print("✅ Agent workflow created successfully")
+            
+            # Test the agent with a simple message to verify it works
+            self._test_agent_initialization()
+            
+        except Exception as e:
+            print(f"❌ Failed to create agent workflow: {e}")
+            import traceback
+            traceback.print_exc()
+            raise e
+            
         self.timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         # Initialize with system message
         self.messages = [SystemMessage(content=agent_prompt(PROJECT_ID, self.timestamp))]
+        print(f"✅ Agent initialized with {len(self.messages)} initial messages")
+        
+    def _test_agent_initialization(self):
+        """Quick test to ensure agent is working properly."""
+        try:
+            test_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            test_system = SystemMessage(content=agent_prompt(PROJECT_ID, test_timestamp))
+            test_human = HumanMessage(content="Hello")
+            
+            result = self.agent_graph.invoke({
+                "messages": [test_system, test_human],
+                "project_id": PROJECT_ID,
+                "timestamp": test_timestamp
+            })
+            
+            # Check if we got a response
+            ai_response_found = False
+            for msg in result.get("messages", []):
+                if isinstance(msg, AIMessage) and msg.content:
+                    ai_response_found = True
+                    break
+            
+            if ai_response_found:
+                print("✅ Agent initialization test passed")
+            else:
+                print("⚠️ Agent initialization test: No AI response found")
+                
+        except Exception as e:
+            print(f"⚠️ Agent initialization test failed: {e}")
+            # Don't raise here, just warn
         
     def reset_conversation(self):
         """Reset the conversation by clearing message history."""
@@ -45,8 +88,11 @@ class AgentInterface:
             return history, ""
             
         try:
+            print(f"🔵 User input: {user_input}")
+            
             # Add user message to internal history
             self.messages.append(HumanMessage(content=user_input))
+            print(f"🔵 Messages before agent call: {len(self.messages)}")
             
             # Run the agent
             result = self.agent_graph.invoke({
@@ -55,48 +101,245 @@ class AgentInterface:
                 "timestamp": self.timestamp
             })
             
+            print(f"🔵 Messages after agent call: {len(result['messages'])}")
+            
             # Update messages with the result
             self.messages = result["messages"]
             
-            # Find the last assistant message that isn't a tool call
-            assistant_message = None
+            # Debug: Print all messages to understand the structure
+            print("🔍 All messages after agent call:")
+            for i, msg in enumerate(self.messages):
+                msg_type = type(msg).__name__
+                content_length = len(msg.content) if hasattr(msg, 'content') and msg.content else 0
+                has_tool_calls = hasattr(msg, 'tool_calls') and msg.tool_calls
+                print(f"  {i}: {msg_type} - Content: {content_length} chars, Tool calls: {has_tool_calls}")
+                if hasattr(msg, 'content') and msg.content:
+                    print(f"     Content: {msg.content[:100]}...")
             
+            # Simple approach: find the last AI message with content
+            response_content = ""
+            
+            # Go through messages from newest to oldest
             for msg in reversed(self.messages):
                 if isinstance(msg, AIMessage):
-                    if not hasattr(msg, "tool_calls") or not msg.tool_calls:
-                        assistant_message = msg
+                    print(f"🔍 Found AIMessage with content: {bool(msg.content)}")
+                    if msg.content and msg.content.strip():
+                        raw_content = msg.content.strip()
+                        
+                        # Extract thinking and clean response separately
+                        thinking_content = self._extract_thinking(raw_content)
+                        cleaned_content = self._clean_ai_response(raw_content)
+                        
+                        print(f"🧠 Thinking extracted: {len(thinking_content)} chars")
+                        print(f"💬 Response extracted: {len(cleaned_content)} chars")
+                        
+                        # Format the final response with thinking
+                        response_content = self._format_response_with_thinking(thinking_content, cleaned_content)
+                        
+                        print(f"✅ Using formatted response: {response_content[:100]}...")
                         break
             
-            if assistant_message:
-                # Try to extract reasoning from the content
-                content = assistant_message.content
-                reasoning = None
+            # If no AI message with content, try to create a helpful response
+            if not response_content:
+                print("🔍 No AI content found, checking for tool usage...")
                 
-                # Check if we have a JSON structure that might contain reasoning
-                try:
-                    if content.startswith('{') and content.endswith('}'):
-                        content_json = json.loads(content)
-                        if 'reasoning' in content_json:
-                            reasoning = content_json['reasoning']
-                            content = content_json.get('response', content)
-                except:
-                    pass
-                
-                # Prepare the response
-                response = content
-                if reasoning:
-                    response = f"**Reasoning:** {reasoning}\n\n**Response:** {content}"
-                
-                # Update chat history
-                history.append((user_input, response))
-            else:
-                history.append((user_input, "No response generated."))
+                # Look for tool calls in AI messages
+                for msg in reversed(self.messages):
+                    if isinstance(msg, AIMessage) and hasattr(msg, 'tool_calls') and msg.tool_calls:
+                        tool_names = [call.get('name', 'unknown') for call in msg.tool_calls]
+                        response_content = f"I used the following tools to help you: {', '.join(tool_names)}. The operation was completed successfully."
+                        print(f"✅ Created tool response: {response_content}")
+                        break
+            
+            # Final fallback - at least acknowledge the user
+            if not response_content:
+                response_content = "I received your message and I'm here to help! However, I didn't generate a specific response. Could you please try rephrasing your question or let me know what you'd like me to help you with?"
+                print("⚠️ Using acknowledgment fallback")
+            
+            print(f"🔵 Final response: {response_content[:100]}...")
+            history.append((user_input, response_content))
                 
         except Exception as e:
-            error_msg = f"Error: {str(e)}"
+            error_msg = f"I apologize, but I encountered an error while processing your request: {str(e)}"
+            print(f"❌ Exception in chat_with_agent: {e}")
+            import traceback
+            traceback.print_exc()
             history.append((user_input, error_msg))
         
+        print(f"🔵 Final history length: {len(history)}")
         return history, ""
+
+    def _clean_ai_response(self, raw_content: str) -> str:
+        """
+        Clean AI response by removing internal thinking tags and extracting user-facing content.
+        
+        Args:
+            raw_content: Raw AI response content
+            
+        Returns:
+            Cleaned response content suitable for display
+        """
+        import re
+
+        # Remove <think> tags and their content
+        content = re.sub(r'<think>.*?</think>', '', raw_content, flags=re.DOTALL)
+        
+        # Remove any remaining think tags (unclosed)
+        content = re.sub(r'<think>.*', '', content, flags=re.DOTALL)
+        
+        # Remove other common internal tags
+        content = re.sub(r'</?thinking>', '', content, flags=re.IGNORECASE)
+        content = re.sub(r'</?internal>', '', content, flags=re.IGNORECASE)
+        
+        # Clean up whitespace
+        content = content.strip()
+        
+        # If content is empty after cleaning, try to extract from original
+        if not content:
+            # Look for content after closing think tag
+            think_match = re.search(r'</think>\s*(.*)', raw_content, flags=re.DOTALL)
+            if think_match:
+                content = think_match.group(1).strip()
+            
+            # If still empty, look for any text that doesn't start with <think>
+            if not content:
+                lines = raw_content.split('\n')
+                user_facing_lines = []
+                in_think_block = False
+                
+                for line in lines:
+                    line = line.strip()
+                    if line.startswith('<think>'):
+                        in_think_block = True
+                        continue
+                    elif line.startswith('</think>'):
+                        in_think_block = False
+                        continue
+                    elif not in_think_block and line and not line.startswith('<'):
+                        user_facing_lines.append(line)
+                
+                content = '\n'.join(user_facing_lines).strip()
+        
+        return content
+
+    def _extract_thinking(self, raw_content: str) -> str:
+        """
+        Extract thinking content from AI response.
+        
+        Args:
+            raw_content: Raw AI response content
+            
+        Returns:
+            Extracted thinking content
+        """
+        import re
+        
+        thinking_parts = []
+        
+        # Extract content within <think> tags
+        think_matches = re.findall(r'<think>(.*?)</think>', raw_content, flags=re.DOTALL)
+        for match in think_matches:
+            thinking_parts.append(match.strip())
+        
+        # Extract unclosed think content
+        unclosed_match = re.search(r'<think>(.*)', raw_content, flags=re.DOTALL)
+        if unclosed_match and not think_matches:  # Only if no closed think tags found
+            thinking_parts.append(unclosed_match.group(1).strip())
+        
+        # Join all thinking parts
+        thinking_content = '\n\n'.join(thinking_parts).strip()
+        
+        return thinking_content
+
+    def _format_response_with_thinking(self, thinking: str, response: str) -> str:
+        """
+        Format response to include thinking process in a user-friendly way.
+        
+        Args:
+            thinking: AI thinking content
+            response: Cleaned AI response
+            
+        Returns:
+            Formatted response with thinking
+        """
+        if not thinking and not response:
+            return "죄송합니다. 응답을 생성하지 못했습니다."
+        
+        if not thinking:
+            return response if response else "응답을 처리했지만 내용이 없습니다."
+        
+        if not response:
+            return f"""<div class="thinking-section">
+🤔 **AI 생각 과정:**
+
+*{thinking}*
+</div>
+
+⏳ 응답을 생성하는 중입니다..."""
+        
+        # Both thinking and response exist
+        formatted = f"""<div class="thinking-section">
+🤔 **AI 생각 과정:**
+
+*{thinking}*
+</div>
+
+---
+
+💬 **답변:**
+
+{response}"""
+        return formatted
+
+    def test_agent(self) -> str:
+        """Test the agent with a simple query."""
+        try:
+            print("🔄 Starting agent test...")
+            test_message = HumanMessage(content="Hello, what can you help me with?")
+            test_result = self.agent_graph.invoke({
+                "messages": [self.messages[0], test_message], 
+                "project_id": PROJECT_ID, 
+                "timestamp": self.timestamp
+            })
+            
+            print(f"📊 Test result contains {len(test_result['messages'])} messages")
+            
+            # Analyze all messages
+            for i, msg in enumerate(test_result["messages"]):
+                msg_type = type(msg).__name__
+                has_content = hasattr(msg, 'content') and bool(msg.content)
+                has_tools = hasattr(msg, 'tool_calls') and bool(msg.tool_calls)
+                print(f"  Message {i}: {msg_type} - Content: {has_content}, Tools: {has_tools}")
+                if has_tools:
+                    print(f"     Tool calls: {msg.tool_calls}")
+            
+            # Find the response
+            for msg in reversed(test_result["messages"]):
+                if isinstance(msg, AIMessage):
+                    if msg.content and msg.content.strip():
+                        raw_content = msg.content.strip()
+                        thinking_content = self._extract_thinking(raw_content)
+                        cleaned_content = self._clean_ai_response(raw_content)
+                        
+                        if thinking_content or cleaned_content:
+                            formatted_response = self._format_response_with_thinking(thinking_content, cleaned_content)
+                            response_preview = formatted_response[:200].replace('\n', ' ')
+                            return f"✅ Agent test successful!\n\nResponse with thinking: {response_preview}..."
+                        else:
+                            response_preview = raw_content[:100].replace('\n', ' ')
+                            return f"✅ Agent test successful!\n\nRaw Response: {response_preview}..."
+                    elif hasattr(msg, 'tool_calls') and msg.tool_calls:
+                        tool_names = [call.get('name', 'unknown') for call in msg.tool_calls]
+                        return f"✅ Agent test successful!\n\nAgent used tools: {', '.join(tool_names)}"
+                    else:
+                        return f"⚠️ Agent responded but AI message has no content or tools"
+                        
+            return "❌ No AI response found in test"
+            
+        except Exception as e:
+            import traceback
+            error_details = traceback.format_exc()
+            return f"❌ Agent test failed: {str(e)}\n\nDetails:\n{error_details}"
 
 
 def create_gradio_interface():
@@ -116,6 +359,14 @@ def create_gradio_interface():
         }
         .chat-container {
             height: 600px;
+        }
+        .thinking-section {
+            background-color: #f8f9fa;
+            border-left: 4px solid #6c757d;
+            padding: 10px;
+            margin: 5px 0;
+            font-style: italic;
+            color: #6c757d;
         }
         """
     ) as demo:
@@ -142,7 +393,9 @@ def create_gradio_interface():
                     height=500,
                     show_label=True,
                     elem_classes=["chat-container"],
-                    bubble_full_width=False
+                    bubble_full_width=False,
+                    show_copy_button=True,
+                    render_markdown=True
                 )
                 
                 with gr.Row():
@@ -158,6 +411,14 @@ def create_gradio_interface():
                 
                 with gr.Row():
                     clear_btn = gr.Button("Clear Chat", variant="secondary")
+                    test_btn = gr.Button("Test Agent", variant="secondary")
+                
+                # Test output
+                test_output = gr.Textbox(
+                    label="Agent Test Result",
+                    interactive=False,
+                    visible=False
+                )
                     
             with gr.Column(scale=1):
                 # Info panel
@@ -196,6 +457,10 @@ def create_gradio_interface():
             agent_interface.reset_conversation()
             return []
         
+        def handle_test():
+            result = agent_interface.test_agent()
+            return gr.update(value=result, visible=True)
+        
         # Connect events
         msg.submit(
             handle_submit,
@@ -215,6 +480,11 @@ def create_gradio_interface():
             handle_clear,
             outputs=[chatbot],
             show_progress=False
+        )
+        
+        test_btn.click(
+            handle_test,
+            outputs=test_output
         )
         
         # Example messages

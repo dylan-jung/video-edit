@@ -2,6 +2,8 @@
 import json
 from typing import Any, Dict, Union
 
+from langchain_core.tools import Tool
+
 from src.repository.cloud_storage_repository import CloudStorageRepository
 from src.repository.repository import Repository
 from src.server.agent.config import PROJECT_ID
@@ -14,20 +16,14 @@ class ReadVideoMetadataTool:
     """
     name = "read_video_metadata"
     description = (
-        "Return metadata (as JSON) for a video.",
-        "metadata is a JSON file that contains video metadata information. this file has information about the video's duration, resolution, fps, creation_time etc.",
-        "Output: metadata (as JSON)"
+        "Read metadata information for a specific video. "
+        "Returns comprehensive video metadata as JSON including duration, resolution, "
+        "frame rate (fps), creation time, file size, and other technical properties. "
+        "This metadata is essential for understanding video characteristics before editing. "
+        "Input: video_id (str) - the id of the video to read metadata from "
+        "Output: metadata (JSON) - the metadata of the video"
     )
-    parameters = {
-        "type": "object",
-        "properties": {
-            "video_id": {
-                "type": "string",
-                "description": "the id of the video file"
-            }
-        },
-        "required": ["video_id"]
-    }
+    
     def __init__(self):
         self.repository: Repository = CloudStorageRepository()
 
@@ -38,13 +34,14 @@ class ReadVideoMetadataTool:
         # Tool-calling 프로토콜에 맞춰 항상 문자열(JSON)로 반환
         return json.dumps(metadata, ensure_ascii=False)
     
-    @staticmethod
-    def as_tool() -> Dict[str, Any]:
-        return {
-            "type": "function",
-            "function": {
-                "name": ReadVideoMetadataTool.name,
-                "description": "\n".join(ReadVideoMetadataTool.description),
-                "parameters": ReadVideoMetadataTool.parameters
-            }
-        }
+    def as_tool(self) -> Tool:
+        def tool_func(*args, **kwargs) -> str:
+            # LangChain이 video_id를 args[0]이나 kwargs에서 전달할 수 있음
+            video_id = args[0] if args else kwargs.get('video_id', '')
+            return self.call(video_id)
+        
+        return Tool(
+            name=self.name,
+            description=self.description,
+            func=tool_func
+        )

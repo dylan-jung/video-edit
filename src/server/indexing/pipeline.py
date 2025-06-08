@@ -22,7 +22,7 @@ def pipeline(project_id: str, video_id: str):
     video_url = f"projects/{project_id}/{video_id}/video.mp4"
     scenes_url = f"projects/{project_id}/{video_id}/scenes.json"
     metadata_url = f"projects/{project_id}/{video_id}/metadata.json"
-    vector_db_url = f"projects/{project_id}/{video_id}/vector_db.faiss"
+    vector_db_url = f"projects/{project_id}/vision_vector_db.faiss"
 
     transcription_path = f"projects/{project_id}/{video_id}/transcription.json"
     scene_descriptions_path = f"projects/{project_id}/{video_id}/scene_descriptions.json"

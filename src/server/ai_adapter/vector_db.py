@@ -45,7 +45,6 @@ class VectorDB:
         for i, scene in enumerate(scenes):
             scene_meta = {
                 'video_id': video_id,
-                'scene_index': i,
                 'start_time': scene.get('start_time'),
                 'end_time': scene.get('end_time'),
                 'background': scene.get('background'),
@@ -55,7 +54,6 @@ class VectorDB:
                 'emotions': scene.get('emotions', []),
                 'context': scene.get('context'),
                 'highlight': scene.get('highlight', []),
-                'scene_id': f"{video_id}_scene_{i+1}",  # video_id와 scene 번호로 ID 생성
                 'faiss_index': start_idx + i
             }
             self.scene_metadata.append(scene_meta)
