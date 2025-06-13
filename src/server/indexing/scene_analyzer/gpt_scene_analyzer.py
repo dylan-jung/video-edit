@@ -92,9 +92,10 @@ def analyze_video_with_gpt(video_path: str, chunk_index: int, model_name: str = 
         print(f"비디오 청크 {chunk_index} 프레임 추출 중: {video_path}")
         base64_frames = extract_frames_from_video(video_path)
         
-        if not base64_frames:
-            raise ValueError(f"비디오에서 프레임을 추출할 수 없습니다: {video_path}")
-        
+        if len(base64_frames) == 0:
+            print(f"비디오가 비어있습니다: {video_path}")
+            return []
+
         # Initialize GPT model
         model = init_gpt_model(model_name=model_name)
         

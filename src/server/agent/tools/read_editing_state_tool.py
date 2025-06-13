@@ -17,7 +17,8 @@ class ReadEditingStateTool:
         "This tool returns the complete editing state as JSON, which contains "
         "timeline information, clips, and configurations "
         "This file drives the entire video editing process. "
-        "Input: none "
+        "Index number is added to the beginning of each line. so you can easily find the line you want to edit."
+        "Input: none"
         "Output: editing_state (JSON) - the current project state"
     )
 
@@ -43,8 +44,10 @@ class ReadEditingStateTool:
             try:
                 with open(full_path, 'r', encoding='utf-8') as f:
                     project_data = json.load(f)
-                
-                return json.dumps(project_data, ensure_ascii=False)
+                tracks = project_data["tracks"]
+                items = [f"Index {i}: {track}" for i, track in enumerate(tracks)]
+                print(items)
+                return "\n".join(items)
                 
             except json.JSONDecodeError as e:
                 return json.dumps({

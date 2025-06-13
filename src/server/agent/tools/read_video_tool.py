@@ -14,7 +14,7 @@ class ReadVideoInput(BaseModel):
     video_id: str = Field(description="ID/filename of the video file")
     start_time: str = Field(description="Start time in format 'hh:mm:ss'")
     end_time: str = Field(description="End time in format 'hh:mm:ss'")
-    fps: float = Field(default=0.5, description="Frames per second to extract (less than 1)")
+    fps: float = Field(default=1, description="Frames per second to extract")
 
 
 class ReadVideoTool:

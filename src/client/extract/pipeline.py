@@ -1,3 +1,4 @@
+import json
 import os
 import shutil
 
@@ -34,7 +35,20 @@ def pipeline(project_id: str, video_path: str):
         shutil.copy(processed_video_path, f"./projects/{project_id}/{video_id}/video.mp4")
         shutil.copy(processed_audio_path, f"./projects/{project_id}/{video_id}/audio.wav")
         shutil.copy(metadata_path, f"./projects/{project_id}/{video_id}/metadata.json")
+        
+        # video_id와 video_path 정보를 info.json으로 저장
+        info_path = f"./projects/{project_id}/{video_id}/info.json"
+        if not os.path.exists(info_path):
+            info = {}
+        else:
+            with open(info_path, 'r', encoding='utf-8') as f:
+                info = json.load(f)
+        info[video_id] = video_path
+        with open(info_path, 'w', encoding='utf-8') as f:
+            json.dump(info, f, ensure_ascii=False, indent=2)
+        
         print("✅ Debug files copied")
+
 
     # Scene division
     # scenes = detect_scene_boundaries(

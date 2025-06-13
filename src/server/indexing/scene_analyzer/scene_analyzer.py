@@ -132,35 +132,38 @@ def analyze_video_scenes(video_path: str, model: str = "gemini-2.0-flash", chunk
     temp_chunks_dir = None
     
     try:
-        # # Step 1: Split video into 5-minute chunks
-        # print("1. 동영상을 5분씩 분할 중...")
-        # chunk_paths = split_video_into_chunks(video_path, chunk_duration=chunk_duration)
-        # print(f"총 {len(chunk_paths)}개의 청크로 분할 완료")
+        # Step 1: Split video into 5-minute chunks
+        print("1. 동영상을 5분씩 분할 중...")
+        chunk_paths = split_video_into_chunks(video_path, chunk_duration=chunk_duration)
+        print(f"총 {len(chunk_paths)}개의 청크로 분할 완료")
         
-        # if chunk_paths:
-        #     temp_chunks_dir = os.path.dirname(chunk_paths[0])
+        if chunk_paths:
+            temp_chunks_dir = os.path.dirname(chunk_paths[0])
         
-        # # Step 2 & 3: Sample at 1 fps and analyze each chunk
-        # analysis_results = []
+        # Step 2 & 3: Sample at 1 fps and analyze each chunk
+        analysis_results = []
         
-        # for i, chunk_path in enumerate(chunk_paths):
-        #     print(f"\n2. 청크 {i+1}/{len(chunk_paths)} 처리 중...")
+        for i, chunk_path in enumerate(chunk_paths):
+            print(f"\n2. 청크 {i+1}/{len(chunk_paths)} 처리 중...")
             
-        #     # Sample at 1 fps
-        #     sampled_path = sample_video_some_fps(chunk_path, fps=1)
-        #     print(f"FPS 샘플링 완료: {sampled_path}")
+            # Sample at 1 fps
+            sampled_path = sample_video_some_fps(chunk_path, fps=1)
+            print(f"FPS 샘플링 완료: {sampled_path}")
             
-        #     # Analyze with Gemini (with caching)
-        #     if "gemini" in model:
-        #         analysis: List[Dict[str, Any]] = analyze_video_chunk_with_gemini_cached(sampled_path, i, model)
-        #         analysis_results.append(analysis)
-        #     else:
-        #         analysis: List[Dict[str, Any]] = analyze_video_with_gpt(sampled_path, i, model)
-        #         analysis_results.append(analysis)
-        #     print(f"청크 {i+1} 분석 완료")
-        
-        with open("analysis_results.json", "r", encoding="utf-8") as f:
-            analysis_results = json.load(f)
+            # Analyze with Gemini (with caching)
+            if "gemini" in model:
+                analysis: List[Dict[str, Any]] = analyze_video_chunk_with_gemini_cached(sampled_path, i, model)
+                if len(analysis) == 0:
+                    print(f"청크 {i+1} 분석 결과가 비어있습니다.")
+                    continue
+                analysis_results.append(analysis)
+            else:
+                analysis: List[Dict[str, Any]] = analyze_video_with_gpt(sampled_path, i, model)
+                if len(analysis) == 0:
+                    print(f"청크 {i+1} 분석 결과가 비어있습니다.")
+                    continue
+                analysis_results.append(analysis)
+            print(f"청크 {i+1} 분석 완료")
         
         # Step 4: Merge scenes
         merged_scenes = merge_scenes(video_path, analysis_results, chunk_duration, 1, model)
@@ -172,13 +175,12 @@ def analyze_video_scenes(video_path: str, model: str = "gemini-2.0-flash", chunk
     
     finally:
         # Clean up temp directory
-        pass
-        # if temp_chunks_dir and os.path.exists(temp_chunks_dir):
-        #     try:
-        #         shutil.rmtree(temp_chunks_dir)
-        #         print("임시 청크 파일들 정리 완료")
-        #     except Exception as e:
-        #         print(f"임시 파일 정리 실패: {str(e)}")
+        if temp_chunks_dir and os.path.exists(temp_chunks_dir):
+            try:
+                shutil.rmtree(temp_chunks_dir)
+                print("임시 청크 파일들 정리 완료")
+            except Exception as e:
+                print(f"임시 파일 정리 실패: {str(e)}")
 
 # For backward compatibility - clustering based analysis
 def analyze_video_scenes_clustering(video_path: str) -> List[Dict[str, Any]]:

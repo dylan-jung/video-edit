@@ -18,7 +18,7 @@ class VectorDB:
             dimension: 벡터 차원 (기본값: 768, 구글 임베딩 차원)
         """
         self.dimension = dimension
-        self.index = faiss.IndexFlatL2(dimension)  # L2 거리 기반 인덱스
+        self.index = faiss.IndexFlatIP(dimension)  # 코사인 유사도 기반 인덱스 (정규화된 벡터와 Inner Product 사용)
         self.video_metadata = {}  # video_id별 메타데이터 저장
         self.scene_metadata = []  # 각 벡터에 대응하는 장면 메타데이터
         
@@ -34,8 +34,11 @@ class VectorDB:
         if len(scenes) != len(embeddings):
             raise ValueError("scenes와 embeddings의 길이가 일치하지 않습니다")
         
-        # 임베딩을 numpy 배열로 변환
+        # 임베딩을 numpy 배열로 변환 및 정규화 (코사인 유사도를 위해)
         embedding_matrix = np.array(embeddings).astype('float32')
+        # 벡터 정규화 (L2 norm = 1)
+        norms = np.linalg.norm(embedding_matrix, axis=1, keepdims=True)
+        embedding_matrix = embedding_matrix / (norms + 1e-8)  # 0으로 나누는 것 방지
         
         # FAISS 인덱스에 추가
         start_idx = self.index.ntotal
@@ -54,7 +57,6 @@ class VectorDB:
                 'emotions': scene.get('emotions', []),
                 'context': scene.get('context'),
                 'highlight': scene.get('highlight', []),
-                'faiss_index': start_idx + i
             }
             self.scene_metadata.append(scene_meta)
         
@@ -98,14 +100,19 @@ class VectorDB:
         if self.index.ntotal == 0:
             return []
         
+        # 쿼리 벡터 정규화 (코사인 유사도를 위해)
         query_vector = np.array([query_embedding]).astype('float32')
-        distances, indices = self.index.search(query_vector, min(k, self.index.ntotal))
+        query_norm = np.linalg.norm(query_vector, axis=1, keepdims=True)
+        query_vector = query_vector / (query_norm + 1e-8)  # 0으로 나누는 것 방지
+        
+        # Inner Product 검색 (정규화된 벡터에서는 코사인 유사도와 동일)
+        similarities, indices = self.index.search(query_vector, min(k, self.index.ntotal))
         
         results = []
-        for distance, idx in zip(distances[0], indices[0]):
+        for similarity, idx in zip(similarities[0], indices[0]):
             if idx < len(self.scene_metadata):
                 scene_meta = self.scene_metadata[idx].copy()
-                scene_meta['similarity_score'] = float(distance)
+                scene_meta['similarity_score'] = float(similarity)  # Inner Product 값 (높을수록 유사)
                 results.append(scene_meta)
         
         return results
@@ -173,7 +180,7 @@ class VectorDB:
         if os.path.exists(index_path):
             index = faiss.read_index(index_path)
         else:
-            index = faiss.IndexFlatL2(metadata['dimension'])
+            index = faiss.IndexFlatIP(metadata['dimension'])
         
         # 인스턴스 복원
         db = cls(metadata['dimension'])

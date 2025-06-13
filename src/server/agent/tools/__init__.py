@@ -7,6 +7,8 @@ from src.server.agent.config import PROJECT_ID
 from src.server.agent.tools.read_transcription_overview_tool import \
     ReadVideoTranscriptionOverviewTool
 from src.server.agent.tools.read_video_tool import ReadVideoTool
+from src.server.agent.tools.sementic_speech_search_tool import \
+    SementicSpeechSearchTool
 
 from .list_videos_tool import ListVideosTool
 from .read_editing_state_tool import ReadEditingStateTool
@@ -25,7 +27,8 @@ available_tools = [
     # ReadVideoTranscriptionOverviewTool(),
     ReadVideoTranscriptionTool(),
     SementicVisionSearchTool(),
-    # ReadVideoTool(),
+    SementicSpeechSearchTool(),
+    ReadVideoTool(),
 ]
 
 class ToolExecutor:

@@ -64,6 +64,11 @@ def create_concat_file(segments, concat_file_path):
         for segment in segments:
             f.write(f"file '{segment}'\n")
 
+def get_video_path(project_id, video_id):
+    info_path = f"./projects/{project_id}/{video_id}/info.json"
+    with open(info_path, 'r', encoding='utf-8') as f:
+        info = json.load(f)
+    return info[video_id]
 
 def render_video(editing_state_path, output_path=None):
     """메인 렌더링 함수"""
@@ -87,7 +92,7 @@ def render_video(editing_state_path, output_path=None):
     
     project_id = editing_state.get('project_id', 'unknown')
     tracks = editing_state.get('tracks', [])
-    
+
     if not tracks:
         print("오류: 트랙 정보가 없습니다.")
         return False
@@ -111,11 +116,7 @@ def render_video(editing_state_path, output_path=None):
             trim_out = track['trimOut']
             
             # 소스 비디오 파일 경로
-            src_video_path = project_dir / src / 'video.mp4'
-            
-            if not src_video_path.exists():
-                print(f"오류: 소스 비디오 파일을 찾을 수 없습니다: {src_video_path}")
-                return False
+            src_video_path = get_video_path(project_id, src)
             
             # 세그먼트 파일 경로
             segment_path = os.path.join(temp_dir, f"segment_{i:03d}.mp4")

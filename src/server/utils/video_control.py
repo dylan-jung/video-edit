@@ -91,7 +91,6 @@ def trim_and_sample_video(video_path: str, start_time: str, end_time: str, fps: 
         print(f"Trim & Sample 캐시에서 로드됨: {output_path}")
         return output_path
     
-    print(fps)
     print(f"🔍 Trim & Sample 비디오 생성 시작: {video_path} -> {output_path}")
     # Create trimmed and sampled video using single ffmpeg command
     cmd = [
@@ -167,7 +166,9 @@ def extract_frames_from_video(video_path: str) -> List[str]:
     video = cv2.VideoCapture(video_path)
     
     if not video.isOpened():
-        raise ValueError(f"비디오 파일을 열 수 없습니다: {video_path}")
+        # raise ValueError(f"비디오 파일을 열 수 없습니다: {video_path}")
+        print(f"비디오 파일을 열 수 없습니다: {video_path}")
+        return []
     
     base64_frames = []
     frame_count = 0
