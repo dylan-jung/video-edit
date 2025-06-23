@@ -28,9 +28,11 @@ class ReadVideoTranscriptionTool:
         self.repository: Repository = CloudStorageRepository()
 
     def call(self, video_id: str) -> str:
-        transcription_bytes = self.repository.get_video_transcription(PROJECT_ID, video_id)
-        transcription_json = json.loads(transcription_bytes)
-        transcription = transcription_json["transcription"]
+        with open(f"projects/{PROJECT_ID}/{video_id}/transcription.json", "r") as f:
+            transcription_json = json.load(f)
+        # transcription_bytes = self.repository.get_video_transcription(PROJECT_ID, video_id)
+        # transcription_json = json.loads(transcription_bytes)
+        transcription = transcription_json["transcription"] 
 
         return json.dumps(transcription, ensure_ascii=False)
         

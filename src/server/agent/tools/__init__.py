@@ -23,7 +23,7 @@ available_tools = [
     ReadVideoMetadataTool(),
     ReadEditingStateTool(),
     WriteEditingStateTool(),
-    # ReadVideoSceneDescriptionsTool(),
+    ReadVideoSceneDescriptionsTool(),
     # ReadVideoTranscriptionOverviewTool(),
     ReadVideoTranscriptionTool(),
     SementicVisionSearchTool(),

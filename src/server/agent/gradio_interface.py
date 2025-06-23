@@ -24,8 +24,6 @@ class AgentInterface:
             self.agent_graph = create_agent_workflow(AgentState)
             print("✅ Agent workflow created successfully")
             
-            # Test the agent with a simple message to verify it works
-            self._test_agent_initialization()
             
         except Exception as e:
             print(f"❌ Failed to create agent workflow: {e}")
@@ -37,35 +35,6 @@ class AgentInterface:
         # Initialize with system message
         self.messages = [SystemMessage(content=agent_prompt(PROJECT_ID, self.timestamp))]
         print(f"✅ Agent initialized with {len(self.messages)} initial messages")
-        
-    def _test_agent_initialization(self):
-        """Quick test to ensure agent is working properly."""
-        try:
-            test_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            test_system = SystemMessage(content=agent_prompt(PROJECT_ID, test_timestamp))
-            test_human = HumanMessage(content="Hello")
-            
-            result = self.agent_graph.invoke({
-                "messages": [test_system, test_human],
-                "project_id": PROJECT_ID,
-                "timestamp": test_timestamp
-            })
-            
-            # Check if we got a response
-            ai_response_found = False
-            for msg in result.get("messages", []):
-                if isinstance(msg, AIMessage) and msg.content:
-                    ai_response_found = True
-                    break
-            
-            if ai_response_found:
-                print("✅ Agent initialization test passed")
-            else:
-                print("⚠️ Agent initialization test: No AI response found")
-                
-        except Exception as e:
-            print(f"⚠️ Agent initialization test failed: {e}")
-            # Don't raise here, just warn
         
     def reset_conversation(self):
         """Reset the conversation by clearing message history."""
@@ -291,57 +260,6 @@ class AgentInterface:
 {response}"""
         return formatted
 
-    def test_agent(self) -> str:
-        """Test the agent with a simple query."""
-        try:
-            print("🔄 Starting agent test...")
-            test_message = HumanMessage(content="Hello, what can you help me with?")
-            test_result = self.agent_graph.invoke({
-                "messages": [self.messages[0], test_message], 
-                "project_id": PROJECT_ID, 
-                "timestamp": self.timestamp
-            })
-            
-            print(f"📊 Test result contains {len(test_result['messages'])} messages")
-            
-            # Analyze all messages
-            for i, msg in enumerate(test_result["messages"]):
-                msg_type = type(msg).__name__
-                has_content = hasattr(msg, 'content') and bool(msg.content)
-                has_tools = hasattr(msg, 'tool_calls') and bool(msg.tool_calls)
-                print(f"  Message {i}: {msg_type} - Content: {has_content}, Tools: {has_tools}")
-                if has_tools:
-                    print(f"     Tool calls: {msg.tool_calls}")
-            
-            # Find the response
-            for msg in reversed(test_result["messages"]):
-                if isinstance(msg, AIMessage):
-                    if msg.content and msg.content.strip():
-                        raw_content = msg.content.strip()
-                        thinking_content = self._extract_thinking(raw_content)
-                        cleaned_content = self._clean_ai_response(raw_content)
-                        
-                        if thinking_content or cleaned_content:
-                            formatted_response = self._format_response_with_thinking(thinking_content, cleaned_content)
-                            response_preview = formatted_response[:200].replace('\n', ' ')
-                            return f"✅ Agent test successful!\n\nResponse with thinking: {response_preview}..."
-                        else:
-                            response_preview = raw_content[:100].replace('\n', ' ')
-                            return f"✅ Agent test successful!\n\nRaw Response: {response_preview}..."
-                    elif hasattr(msg, 'tool_calls') and msg.tool_calls:
-                        tool_names = [call.get('name', 'unknown') for call in msg.tool_calls]
-                        return f"✅ Agent test successful!\n\nAgent used tools: {', '.join(tool_names)}"
-                    else:
-                        return f"⚠️ Agent responded but AI message has no content or tools"
-                        
-            return "❌ No AI response found in test"
-            
-        except Exception as e:
-            import traceback
-            error_details = traceback.format_exc()
-            return f"❌ Agent test failed: {str(e)}\n\nDetails:\n{error_details}"
-
-
 def create_gradio_interface():
     """Create and configure the Gradio interface."""
     
@@ -375,12 +293,6 @@ def create_gradio_interface():
             """
             # 🤖 Attenz AI Agent
             
-            Welcome to Attenz AI Agent! I can help you with various tasks including:
-            - 📹 Video analysis and scene understanding
-            - 🔍 Searching through your video database  
-            - 📊 Data analysis and insights
-            - 💬 General conversation and assistance
-            
             Start chatting below!
             """
         )
@@ -411,14 +323,7 @@ def create_gradio_interface():
                 
                 with gr.Row():
                     clear_btn = gr.Button("Clear Chat", variant="secondary")
-                    test_btn = gr.Button("Test Agent", variant="secondary")
                 
-                # Test output
-                test_output = gr.Textbox(
-                    label="Agent Test Result",
-                    interactive=False,
-                    visible=False
-                )
                     
             with gr.Column(scale=1):
                 # Info panel
@@ -457,34 +362,25 @@ def create_gradio_interface():
             agent_interface.reset_conversation()
             return []
         
-        def handle_test():
-            result = agent_interface.test_agent()
-            return gr.update(value=result, visible=True)
-        
         # Connect events
         msg.submit(
             handle_submit,
             inputs=[msg, chatbot],
             outputs=[chatbot, msg],
-            show_progress=True
+            show_progress="minimal"
         )
         
         send_btn.click(
             handle_submit,
             inputs=[msg, chatbot], 
             outputs=[chatbot, msg],
-            show_progress=True
+            show_progress="minimal"
         )
         
         clear_btn.click(
             handle_clear,
             outputs=[chatbot],
-            show_progress=False
-        )
-        
-        test_btn.click(
-            handle_test,
-            outputs=test_output
+            show_progress="minimal"
         )
         
         # Example messages
@@ -514,8 +410,8 @@ def main():
     demo.launch(
         server_name="0.0.0.0",
         server_port=7860,
-        share=False,
-        show_error=True,
+        share=True,
+        show_error=False,
         show_api=True,
         enable_monitoring=True,
         max_threads=10

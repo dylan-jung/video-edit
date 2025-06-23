@@ -27,10 +27,15 @@ class ReadVideoSceneDescriptionsTool:
     def __init__(self):
         self.repository: Repository = CloudStorageRepository()
 
-    def call(self, video_id: str) -> str:
-        scene_descriptions_bytes = self.repository.get_video_scene_descriptions(PROJECT_ID, video_id)
-        scene_descriptions = json.loads(scene_descriptions_bytes)
+    def _get_scene_descriptions(self, video_id: str) -> str:
+        with open(f"projects/{PROJECT_ID}/{video_id}/scene_descriptions.json", "r") as f:
+            scene_descriptions = json.load(f)
+        # scene_descriptions_bytes = self.repository.get_video_scene_descriptions(PROJECT_ID, video_id)
+        # scene_descriptions = json.loads(scene_descriptions_bytes)
+        return scene_descriptions
 
+    def call(self, video_id: str) -> str:
+        scene_descriptions = self._get_scene_descriptions(video_id)
         return json.dumps(scene_descriptions, ensure_ascii=False)
         
     def as_tool(self) -> Tool:
