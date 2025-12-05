@@ -31,3 +31,6 @@ projects
 
 *.json
 *.txt
+
+.cursorrules
+.DS_Store

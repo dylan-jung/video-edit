@@ -132,8 +132,6 @@ def analyze_video_scenes(video_path: str, model: str = "gemini-2.0-flash", chunk
     temp_chunks_dir = None
     
     try:
-        # Step 1: Split video into 5-minute chunks
-        print("1. 동영상을 5분씩 분할 중...")
         chunk_paths = split_video_into_chunks(video_path, chunk_duration=chunk_duration)
         print(f"총 {len(chunk_paths)}개의 청크로 분할 완료")
         
