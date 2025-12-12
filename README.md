@@ -1,323 +1,123 @@
-# Video Extraction Tool
+# 프로젝트 아키텍처 및 상세 설계 (Advanced Project Architecture & Design)
 
-This tool processes videos, extracts scenes, and uploads the processed content to Supabase storage.
+본 문서는 지능형 비디오 편집 어시스턴트 프로젝트의 구현을 위한 상세 설계 문서입니다. **Modular Monolith** 아키텍처를 채택하여 도메인 간 결합도를 낮추고 확장성을 보장합니다.
 
-## Prerequisites
+---
 
-- Python 3.8 or higher
-- Required Python packages (install using `pip install -r requirements.txt`)
-- Supabase account with API credentials
-- Google AI API key for Multimodal Embeddings
-- OpenAI API key for GPT Vision analysis
+## 1. 아키텍처 개요 (Architecture Overview)
 
-## Environment Setup
+### 1.1 하이레벨 아키텍처
+시스템은 크게 세 가지 영역으로 구분됩니다:
+1.  **Server System**: 사용자 요청을 처리하는 API 서버 (FastAPI)
+2.  **Worker System**: 비디오 인덱싱 등 무거운 작업을 비동기로 처리하는 백그라운드 워커 (Cloud Run)
+3.  **Storage & DB**: 데이터 영속성 계층 (GCS, Firestore, Vector DB)
 
-Create a `.env` file in the root directory with the following variables:
-
-```
-SUPABASE_URL=your_supabase_url
-SUPABASE_KEY=your_supabase_key
-GOOGLE_AI_API_KEY=your_google_ai_api_key
-OPENAI_API_KEY=your_openai_api_key
-```
-
-## Scene Analysis Methods
-
-The tool now supports multiple advanced scene analysis methods:
-
-### 🎯 Google Multimodal + FAISS Method
-
-1. **Google Multimodal Embeddings**: Uses Google's state-of-the-art multimodal embeddings for superior frame representation
-2. **FAISS Vector Database**: Efficient similarity search with video-partitioned storage
-3. **K-means Clustering**: Automatic scene detection based on visual similarity
-4. **Outlier Removal**: Intelligent filtering of anomalous frames
-5. **Smart Scene Merging**: Combines short scenes for better coherence
-
-### 🧠 GPT Vision Analysis Method (NEW)
-
-1. **OpenAI GPT-4 Vision**: Advanced visual understanding with natural language descriptions
-2. **LangChain Integration**: Structured interaction with OpenAI APIs
-3. **Frame Sampling**: Intelligent frame extraction and base64 encoding
-4. **Scene Description**: Rich contextual analysis including objects, actions, emotions
-5. **JSON Structured Output**: Detailed scene metadata with timestamps
-
-#### 🔧 GPT Vision Technical Implementation
-
-- **Frame Extraction**: OpenCV-based frame sampling (configurable rate)
-- **Base64 Encoding**: Efficient image encoding for API transmission
-- **Token Optimization**: Smart frame sampling to stay within token limits
-- **LangChain ChatOpenAI**: Structured model interaction with proper error handling
-- **JSON Parsing**: Robust response parsing with multiple format support
-
-#### 📊 GPT Vision Benefits
-
-- **Rich Descriptions**: Natural language scene understanding
-- **Context Awareness**: Understands relationships between objects and actions
-- **Emotion Detection**: Identifies emotional states and tone
-- **OCR Capabilities**: Extracts visible text from video frames
-- **Flexible Prompting**: Custom prompts for specific analysis needs
-
-## Usage
-
-### Simplified Command (Recommended)
-
-Run the tool using the simple wrapper script:
-
-```bash
-./extract.py -v PATH_TO_YOUR_VIDEO
+```mermaid
+graph TD
+    User[User / Client] -->|REST / SSE| API_Server[Cmd: Server (FastAPI)]
+    API_Server -->|Invoke| Chat_Module[Module: Chat]
+    API_Server -->|Write| MongoDB[(MongoDB: index_jobs)]
+    
+    Worker[Cmd: Worker (Cloud Run)] -->|Poll (Periodic)| MongoDB
+    Worker -->|Execute| Indexing_Module[Module: Indexing]
+    
+    Chat_Module -->|Read| VectorDB[(Vector DB)]
+    Indexing_Module -->|Write| VectorDB
+    Indexing_Module -->|Read/Write| GCS[(Cloud Storage)]
 ```
 
-### Testing Scene Analyzers
-
-#### Test Google Multimodal + FAISS Scene Analyzer
-
-```bash
-# Set your Google AI API key
-export GOOGLE_AI_API_KEY="your_api_key_here"
-
-# Run the test script
-python test_scene_analyzer.py
+### 1.2 디렉토리 구조 (Directory Structure)
+```text
+src/
+├── cmd/ (애플리케이션 진입점)
+│   ├── server/
+│   │   └── main.py              # FastAPI 서버 엔트리포인트 (uvicorn 실행 대상)
+│   └── worker/
+│       └── main.py              # Worker 엔트리포인트 (JobPoller 실행)
+├── config/                      # 환경설정
+│   └── settings.py
+├── modules/ (비즈니스 로직 - Bounded Contexts)
+│   ├── indexing/
+│   │   ├── application/         # 유스케이스 (PipelineOrchestrator)
+│   │   ├── domain/              # 엔티티 (Scene, Speech, Video)
+│   │   └── infrastructure/      # 구현체 (adapters, repositories, scene_analyzer)
+│   ├── chat/
+│   │   ├── application/         # 유스케이스 (AgentWorkflow)
+│   │   ├── domain/              # 엔티티 (Message, Session)
+│   │   └── infrastructure/      # 도구 (tools)
+└── shared/ (공통 커널)
+    ├── interfaces/              # 공통 인터페이스 (Repository 등)
+    ├── infrastructure/          # 공통 인프라 (GCP Clients)
+    └── utils/                   # 유틸리티
 ```
 
-#### Test GPT Vision Scene Analyzer (NEW)
-
-```bash
-# Set your OpenAI API key
-export OPENAI_API_KEY="your_openai_api_key_here"
-
-# Run the GPT scene analyzer test
-python test_gpt_scene_analysis.py
-
-# For batch testing multiple videos
-python test_gpt_scene_analysis.py batch
-```
-
-### Using GPT Scene Analyzer in Code
-
-```python
-from src.server.indexing.gpt_scene_analyzer import analyze_video_with_gpt, analyze_video_with_custom_prompt
-
-# Basic scene analysis with default prompt
-result = analyze_video_with_gpt(
-    video_path="your_video.mp4",
-    chunk_index=0,
-    model_name="gpt-4o"
-)
-
-# Custom prompt analysis
-custom_result = analyze_video_with_custom_prompt(
-    video_path="your_video.mp4",
-    custom_prompt="Describe this video in detail",
-    model_name="gpt-4o"
-)
-```
-
-### Alternative Methods
-
-Or use the original module path:
-
-```bash
-python -m src.client.extract.__index__ --video_path PATH_TO_YOUR_VIDEO
-```
-
-With the short form:
-
-```bash
-python -m src.client.extract.__index__ -v PATH_TO_YOUR_VIDEO
-```
-
-## Processing Steps
-
-The tool performs the following operations:
-
-1. **Video Preprocessing**: Frame extraction at 1 FPS
-2. **Scene Analysis** (Choose one method):
-   - **Google Multimodal**: Embedding generation + FAISS clustering
-   - **GPT Vision**: AI-powered visual understanding + structured description
-3. **Vector Storage**: FAISS database with video partitioning (Google method)
-4. **Scene Generation**: Temporal grouping and smart merging
-5. **Content Upload**: Processed files to Supabase storage
-
-## Output
-
-All processed files, including:
-
-- Preprocessed video (video.mp4)
-- Extracted audio (audio.wav)
-- Scene information (scenes.json) - **Now with multiple analysis methods**
-- Video metadata (metadata.json)
-- FAISS vector database (per-project partitioned) - For Google method
-- GPT analysis results (JSON format) - For GPT method
-
-are uploaded to a Supabase bucket named after the video ID.
-
-# Attenz AI Project
-
-## 🚀 Quick Start - Web Interface
-
-### Gradio Web Interface (NEW) 🌐
-
-The easiest way to interact with the Attenz AI Agent is through the web interface:
-
-```bash
-# Install dependencies (includes gradio)
-pip install -r requirements.txt
-
-# Set up environment variables
-export OPENAI_API_KEY="your_openai_api_key"
-export GOOGLE_AI_API_KEY="your_google_ai_api_key"
-
-# Launch the web interface
-python run_gradio.py
-```
-
-Then open your browser and go to: **http://localhost:7860**
-
-#### 🎯 Features
-
-- **💬 Chat Interface**: Natural conversation with the AI agent
-- **🔧 Tool Integration**: Automatic access to video analysis, search, and more
-- **📱 Responsive Design**: Works on desktop and mobile
-- **🎨 Modern UI**: Clean, intuitive interface with examples
-- **🔄 Session Management**: Clear chat and reset conversations
-- **⚡ Real-time**: Instant responses with progress indicators
-
-#### 🛠️ Web Interface Capabilities
-
-- **Video Analysis**: "Analyze the scene in video X"
-- **Smart Search**: "Find videos with cars" or "Search for outdoor scenes"
-- **Data Insights**: "Show me patterns in my video data"
-- **General Assistant**: "What can you help me with?"
-
-## Setup and Testing
-
-### 파이썬 워킹 디렉토리 설정하기
-
-1. **터미널에서 프로젝트 루트로 이동하기**
-
-   ```bash
-   cd /path/to/attenz-ai
-   ```
-
-2. **환경 변수 설정하기**
-
-   ```bash
-   export GOOGLE_AI_API_KEY="your_google_ai_api_key"
-   export OPENAI_API_KEY="your_openai_api_key"
-   ```
-
-3. **테스트 스크립트 실행하기**
-   ```bash
-   python test_scene_analyzer.py          # Google Multimodal + FAISS test
-   python test_gpt_scene_analysis.py      # GPT Vision scene analysis test
-   python test_pipeline.py                # Original pipeline test
-   ```
-
-### 새로운 Scene Analyzer 테스트
-
-#### Google Multimodal + FAISS Method
-
-```bash
-# Google AI API 키 설정
-export GOOGLE_AI_API_KEY="your_api_key_here"
-
-# 새로운 scene analyzer 테스트
-python test_scene_analyzer.py
-
-# 결과 확인
-ls test_scenes_google_*.json
-ls test_faiss_vector_db/
-```
-
-#### GPT Vision Method (NEW)
-
-```bash
-# OpenAI API 키 설정
-export OPENAI_API_KEY="your_openai_api_key_here"
-
-# GPT scene analyzer 테스트
-python test_gpt_scene_analysis.py
-
-# 결과 확인
-ls gpt_analysis_result_*.json
-ls gpt_custom_analysis_*.txt
-```
-
-### 모듈 가져오기 오류 해결 방법
-
-다음 방법 중 하나를 사용할 수 있습니다:
-
-1. **sys.path를 통해 설정 (코드에 포함됨)**
-
-   ```python
-   import sys
-   import os
-   sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-   ```
-
-2. **PYTHONPATH 환경변수 설정**
-
-   ```bash
-   # 리눅스/맥
-   export PYTHONPATH=/path/to/attenz-ai:$PYTHONPATH
-
-   # 윈도우
-   set PYTHONPATH=C:\path\to\attenz-ai;%PYTHONPATH%
-   ```
-
-3. **IDE 설정에서 Source Path 추가**
-   - VS Code: settings.json에 python.analysis.extraPaths 설정
-   - PyCharm: 프로젝트 구조에서 Content Root 설정
-
-### 프로젝트 구조
-
-```
-attenz-ai/
-├── src/
-│   ├── __init__.py
-│   └── server/
-│       ├── __init__.py
-│       ├── indexing/
-│       │   ├── __init__.py
-│       │   ├── pipeline.py
-│       │   ├── scene_processor.py
-│       │   ├── scene_analyzer.py          # Google Multimodal + FAISS
-│       │   ├── gpt_scene_analyzer.py      # 🆕 GPT Vision + LangChain
-│       │   ├── gemini_scene_analyzer.py   # Gemini Vision
-│       │   ├── google_embeddings.py       # Google Multimodal Embeddings
-│       │   └── vector_db.py               # FAISS Vector Database
-│       └── repository/
-│           ├── __init__.py
-│           ├── ai_repository.py
-│           └── supabase_repository.py
-├── test_scene_analyzer.py                 # Google Multimodal + FAISS test
-├── test_gpt_scene_analysis.py             # 🆕 GPT Vision scene analysis test
-└── test_pipeline.py
-```
-
-## Dependencies
-
-### Dependencies for Advanced Scene Analysis
-
-- `faiss-cpu`: Efficient similarity search and clustering
-- `google-generativeai`: Google Multimodal Embeddings API
-- `langchain-openai`: LangChain OpenAI integration for GPT Vision
-- `langchain-core`: Core LangChain components
-- `opencv-python`: Video processing and frame extraction
-
-### Required Python Packages
-
-Install all dependencies:
-
-```bash
-pip install -r requirements.txt
-```
-
-Key packages include:
-
-- `opencv-python`: Video frame extraction
-- `langchain-openai`: GPT Vision integration
-- `faiss-cpu`: Vector similarity search
-- `google-generativeai`: Google AI services
-- `numpy`: Numerical computations
-- `supabase`: Database operations
+---
+
+## 2. 모듈별 상세 설계 (Detailed Module Design)
+
+### 2.1 Indexing Module (`src/modules/indexing`)
+
+#### 역할
+비디오 원본을 분석하여 AI가 이해할 수 있는 형태(Vector)로 변환합니다.
+
+#### 데이터 정합성 및 신뢰성 (Polling-based Outbox Pattern)
+시스템은 메시지 유실을 방지하고 데이터 정합성을 보장하기 위해 **DB Polling** 방식을 사용합니다.
+- **Why**: 별도의 메시지 큐(Pub/Sub) 관리 비용을 제거하고, DB를 단일 진실 공급원(Source of Truth)으로 활용합니다.
+- **Database**: MongoDB (`index_jobs` 컬렉션)
+- **Status Flow**: `PENDING` -> `PROCESSING` -> `DONE` / `FAILED`
+
+**프로세스**:
+1.  **API 서버**: 클라이언트 요청 시, `index_jobs` 컬렉션에 `PENDING` 상태로 작업을 기록합니다.
+2.  **Worker (Poller)**: 백그라운드 워커가 무한 루프를 돌며 DB에서 `PENDING` 작업을 조회(Polling)합니다.
+    -   **처리량 조절 (Updates based on Throughput)**: 워커는 자신의 현재 처리 용량(예: Semaphore, Active Job Count)을 확인하여, **감당할 수 있는 속도에 맞춰서** 작업을 가져옵니다(Backpressure).
+    -   작업을 가져올 때는 `find_one_and_update`를 사용하여 상태를 `PROCESSING`으로 원자적(Atomic)으로 변경하여 중복 처리를 방지합니다.
+3.  **Indexing**: 작업을 수행하고 완료되면 `DONE`, 실패 시 `FAILED`로 업데이트합니다.
+
+#### 주요 클래스 및 흐름
+1.  **`JobPoller` (`infrastructure/job_poller.py`)**:
+    -   `PENDING` 상태의 작업을 주기적으로 조회합니다.
+    -   작업을 발견하면 `PipelineOrchestrator`를 호출합니다.
+
+2.  **`PipelineOrchestrator` (`application/pipeline.py`)**:
+    -   **책임**: 전체 인덱싱 트랜잭션 관리, 상태 업데이트, 예외 처리.
+    -   **Flow**:
+        ```python
+        async def run_pipeline(project_id, video_id):
+            download_resources()
+            await asyncio.gather(
+                run_visual_track(), # 시각 정보 분석
+                run_audio_track()   # 청각 정보 분석
+            )
+            persist_results()
+        ```
+
+3.  **Domain Services (`infrastructure/`)**:
+    -   **`SceneAnalyzer`**: `GPT-4o-mini`를 사용하여 30-300초 단위로 장면을 상세 묘사합니다.
+    -   **`SpeechProcessor`**: `Whisper`로 전체 자막을 생성하고, 청크 단위로 나누어 맥락(Context)을 보강합니다.
+
+### 2.2 Chat Module (`src/modules/chat`)
+
+#### 역할
+LangGraph 기반의 ReAct 에이전트를 구동하여 사용자의 질문에 대답합니다.
+
+#### 주요 클래스
+1.  **`AgentWorkflow` (`application/workflow.py`)**:
+    -   `create_react_agent`를 사용하여 에이전트 그래프를 생성합니다.
+    -   **상태 관리**: `checkpointer`를 통해 대화 히스토리를 저장 및 로드합니다.
+
+2.  **`ToolRegistry` (`infrastructure/tools.py`)**:
+    -   에이전트가 사용할 수 있는 도구들을 정의합니다.
+    -   예: `VideoSearchTool`, `TimestampExtractionTool`
+
+3.  **`StreamHandler` (`application/stream.py`)**:
+    -   FastAPI의 `EventSourceResponse`를 사용하여, 에이전트의 사고 과정(Thought Process)과 최종 답변을 실시간 스트리밍합니다.
+
+### 2.3 Shared & Infrastructure (`src/shared`)
+
+#### 역할
+모든 모듈에서 공통으로 사용하는 인프라 자원을 관리합니다.
+
+1.  **`StorageRepository` (`shared/infrastructure/storage.py`)**:
+    -   GCS(Google Cloud Storage) API를 추상화. `upload_file`, `download_file`, `generate_presigned_url` 메서드 제공.
+2.  **`VectorDBClient`**:
+    -   FAISS 인덱스 파일을 로드하고 검색하는 기능을 제공. 모듈 간 의존성 없이 `shared`에 위치하여 Indexing(Write)과 Chat(Read) 양쪽에서 사용.
