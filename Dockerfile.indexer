@@ -1,0 +1,25 @@
+
+FROM python:3.9-slim
+
+# Install system dependencies (ffmpeg is often needed for video/audio processing)
+RUN apt-get update && apt-get install -y \
+    ffmpeg \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy optimized requirements.txt
+# Copy root requirements.txt (since Modular Monolith uses shared deps)
+COPY requirements.txt requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the entire source code
+COPY . .
+
+# Set Python path to root
+ENV PYTHONPATH=/app
+
+# Run the web service on container startup.
+# Port 8080 is the default for Cloud Run
+CMD ["uvicorn", "src.cmd.worker.main:app", "--host", "0.0.0.0", "--port", "8080"]

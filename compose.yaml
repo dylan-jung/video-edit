@@ -1,0 +1,53 @@
+services:
+  # 1. API Server (FastAPI)
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    container_name: video-edit-server
+    ports:
+      - "8000:8080" # Map host 8000 to container 8080 (Cloud Run default)
+    environment:
+      - DB_URI=mongodb://mongo:27017
+      - DB_NAME=video_edit_db
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - GCP_PROJECT_ID=${GCP_PROJECT_ID}
+      # A dummy credential path if needed, or mount via volume
+      # - GOOGLE_APPLICATION_CREDENTIALS=/app/gcp-sa-key.json
+    depends_on:
+      - mongo
+    volumes:
+      - ./src:/app/src # Hot reloading for code
+      # - ./gcp-sa-key.json:/app/gcp-sa-key.json:ro
+
+  # 2. Worker (Background Indexing)
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.indexer
+    container_name: video-edit-worker
+    ports:
+      - "8001:8080" # Map host 8001 to container 8080. Useful for health checks.
+    environment:
+      - DB_URI=mongodb://mongo:27017
+      - DB_NAME=video_edit_db
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - GCP_PROJECT_ID=${GCP_PROJECT_ID}
+    depends_on:
+      - mongo
+    volumes:
+      - ./src:/app/src # Hot reloading
+
+  # 3. MongoDB
+  mongo:
+    image: mongo:latest
+    container_name: video-edit-mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+volumes:
+  mongo_data:

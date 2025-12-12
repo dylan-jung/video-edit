@@ -2,8 +2,9 @@ import json
 import os
 import shutil
 
-from src.repository import CloudStorageRepository, Repository
-from src.utils.get_video_id import get_video_id
+from src.shared.infrastructure.repository.repository import Repository
+from src.shared.infrastructure.repository.storage import CloudStorageRepository
+from src.shared.utils.get_video_id import get_video_id
 
 from . import preprocessing
 from .scene_divide import detect_scene_boundaries, save_scene_info
@@ -60,9 +61,9 @@ def pipeline(project_id: str, video_path: str):
     if not repository.file_exists(project_id, video_id, 'metadata.json'):
         repository.push_file(
             project_id, video_id, metadata_path, 'metadata.json')
-    # if not repository.file_exists(project_id, video_id, 'scenes.json'):
-    #     repository.push_file(
-    #         project_id, video_id, scene_info_path, 'scenes.json')
+    if not repository.file_exists(project_id, video_id, 'scenes.json'):
+        repository.push_file(
+            project_id, video_id, scene_info_path, 'scenes.json')
     if not repository.file_exists(project_id, video_id, 'video.mp4'):
         repository.push_file(
             project_id, video_id, processed_video_path, 'video.mp4')
