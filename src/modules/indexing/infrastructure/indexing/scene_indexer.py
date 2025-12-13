@@ -2,8 +2,9 @@ import json
 import os
 from src.shared.infrastructure.ai.vector_db import VectorDB
 from src.modules.indexing.application.ports.embedding_port import EmbeddingPort
+from src.modules.indexing.application.ports.scene_indexer_port import SceneIndexerPort
 
-class SceneIndexer:
+class SceneIndexer(SceneIndexerPort):
     def __init__(self, embedding_service: EmbeddingPort):
         self.embedding_service = embedding_service
 

@@ -4,29 +4,14 @@ import os
 import shutil
 from typing import Optional
 
-from fastapi import Depends
-
-from src.shared.infrastructure.repository.storage import CloudStorageRepository
-from src.shared.infrastructure.ai.ai_repository import AIRepository
-# Domain/DTOs can be imported if needed
-
 # Ports
 from src.modules.indexing.application.ports.scene_analyzer_port import SceneAnalyzerPort
 from src.modules.indexing.application.ports.speech_processor_port import SpeechProcessorPort
 from src.modules.indexing.application.ports.embedding_port import EmbeddingPort
-
-# Adapters Imports for Depends (or from dependencies.py), even if it's not clean architecture
-from src.modules.indexing.infrastructure.dependencies import (
-    get_scene_analyzer,
-    get_speech_processor,
-    get_embedding_service,
-    get_scene_indexer,
-    get_speech_indexer,
-    get_cloud_storage_repository,
-    get_ai_repository
-)
-from src.modules.indexing.infrastructure.indexing.scene_indexer import SceneIndexer
-from src.modules.indexing.infrastructure.indexing.speech_indexer import SpeechIndexer
+from src.modules.indexing.application.ports.scene_indexer_port import SceneIndexerPort
+from src.modules.indexing.application.ports.speech_indexer_port import SpeechIndexerPort
+from src.modules.indexing.application.ports.storage_port import StoragePort
+from src.shared.infrastructure.ai.ai_repository import AIRepository
 
 
 class PipelineOrchestrator:
@@ -36,17 +21,16 @@ class PipelineOrchestrator:
     """
     
     def __init__(self, 
-                 repository: CloudStorageRepository = Depends(get_cloud_storage_repository),
-                 ai_repository: AIRepository = Depends(get_ai_repository),
-                 scene_analyzer: SceneAnalyzerPort = Depends(get_scene_analyzer),
-                 speech_processor: SpeechProcessorPort = Depends(get_speech_processor),
-                 embedding_service: EmbeddingPort = Depends(get_embedding_service),
-                 scene_indexer: SceneIndexer = Depends(get_scene_indexer),
-                 speech_indexer: SpeechIndexer = Depends(get_speech_indexer)):
-        
+                 repository: StoragePort,
+                 ai_repository: AIRepository,
+                 scene_analyzer: SceneAnalyzerPort,
+                 speech_processor: SpeechProcessorPort,
+                 embedding_service: EmbeddingPort,
+                 scene_indexer: SceneIndexerPort,
+                 speech_indexer: SpeechIndexerPort):
+
         self.repository = repository
         self.ai_repository = ai_repository
-        
         self.scene_analyzer = scene_analyzer
         self.speech_processor = speech_processor
         self.embedding_service = embedding_service

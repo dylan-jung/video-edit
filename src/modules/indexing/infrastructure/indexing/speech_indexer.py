@@ -2,9 +2,10 @@ import json
 import os
 from src.shared.infrastructure.ai.speech_vector_db import SpeechVectorDB
 from src.modules.indexing.application.ports.embedding_port import EmbeddingPort
+from src.modules.indexing.application.ports.speech_indexer_port import SpeechIndexerPort
 from src.modules.indexing.infrastructure.utils.embedding_utils import speech_to_string
 
-class SpeechIndexer:
+class SpeechIndexer(SpeechIndexerPort):
     def __init__(self, embedding_service: EmbeddingPort):
         self.embedding_service = embedding_service
 

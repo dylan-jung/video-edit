@@ -5,15 +5,10 @@ from fastapi import FastAPI
 
 from src.modules.indexing.application.orchestrator import PipelineOrchestrator
 from src.modules.indexing.infrastructure.job_poller import JobPoller
-from src.modules.indexing.infrastructure.dependencies import (
-    get_scene_analyzer,
-    get_speech_processor,
-    get_embedding_service,
-    get_scene_indexer,
-    get_speech_indexer,
-    get_cloud_storage_repository,
-    get_ai_repository,
-    get_indexing_job_repository
+
+from .dependencies import (
+    get_indexing_job_repository,
+    get_pipeline_orchestrator
 )
 
 # Setup Logging
@@ -28,16 +23,8 @@ async def lifespan(app: FastAPI):
     try:
         logger.info("Initializing Worker...")
         
-        # Instantiate Orchestrator with dependencies manually
-        orchestrator = PipelineOrchestrator(
-            scene_analyzer=get_scene_analyzer(),
-            speech_processor=get_speech_processor(),
-            embedding_service=get_embedding_service(),
-            scene_indexer=get_scene_indexer(),
-            speech_indexer=get_speech_indexer(),
-            repository=get_cloud_storage_repository(),
-            ai_repository=get_ai_repository()
-        )
+        # Instantiate Orchestrator
+        orchestrator = get_pipeline_orchestrator()
         
         # Instantiate Repository
         repository = get_indexing_job_repository()
