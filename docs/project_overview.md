@@ -29,22 +29,20 @@ graph TD
 ### 1.2 디렉토리 구조 (Directory Structure)
 ```text
 src/
-├── cmd/ (애플리케이션 진입점)
-│   ├── server/
-│   │   └── main.py              # FastAPI 서버 엔트리포인트 (uvicorn 실행 대상)
-│   └── worker/
-│       └── main.py              # Worker 엔트리포인트 (JobPoller 실행)
 ├── config/                      # 환경설정
 │   └── settings.py
 ├── modules/ (비즈니스 로직 - Bounded Contexts)
 │   ├── indexing/
 │   │   ├── application/         # 유스케이스 (PipelineOrchestrator)
 │   │   ├── domain/              # 엔티티 (Scene, Speech, Video)
-│   │   └── infrastructure/      # 구현체 (adapters, repositories, scene_analyzer)
-│   ├── chat/
+│   │   ├── infrastructure/      # 구현체 (adapters, repositories, scene_analyzer)
+│   │   └── main.py              # Worker 엔트리포인트 (JobPoller 실행)
+│   ├── server/
+│   │   ├── api/                 # API 엔드포인트
 │   │   ├── application/         # 유스케이스 (AgentWorkflow)
 │   │   ├── domain/              # 엔티티 (Message, Session)
-│   │   └── infrastructure/      # 도구 (tools)
+│   │   ├── infrastructure/      # 도구 (tools)
+│   │   └── main.py              # FastAPI 서버 엔트리포인트 (uvicorn 실행 대상)
 └── shared/ (공통 커널)
     ├── interfaces/              # 공통 인터페이스 (Repository 등)
     ├── infrastructure/          # 공통 인프라 (GCP Clients)

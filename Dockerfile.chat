@@ -22,4 +22,4 @@ ENV PYTHONPATH=/app
 # Run the server
 # Cloud Run expects port 8080, but we can configure it.
 # For local docker-compose, we map 8000.
-CMD ["uvicorn", "src.cmd.server.main:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["uvicorn", "src.modules.chat.main:app", "--host", "0.0.0.0", "--port", "8080"]

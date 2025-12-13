@@ -1,9 +1,9 @@
 services:
   # 1. API Server (FastAPI)
-  server:
+  chat:
     build:
       context: .
-      dockerfile: Dockerfile.server
+      dockerfile: Dockerfile.chat
     container_name: video-edit-server
     ports:
       - "8000:8080" # Map host 8000 to container 8080 (Cloud Run default)
