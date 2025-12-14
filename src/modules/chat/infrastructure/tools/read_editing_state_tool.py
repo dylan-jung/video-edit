@@ -1,10 +1,10 @@
 import json
 import os
-from typing import Any, Dict, Union
+from typing import Annotated, Any, Dict, Union
+from langgraph.prebuilt import InjectedState
+from langchain_core.tools import StructuredTool, Tool
 
-from langchain_core.tools import Tool
 
-# from ..config import PROJECT_ID
 
 
 class ReadEditingStateTool:
@@ -22,21 +22,24 @@ class ReadEditingStateTool:
         "Output: editing_state (JSON) - the current project state"
     )
 
+    def __init__(self):
+        pass
+
     def _get_editing_state_path(self, project_id: str) -> str:
         """Get the editing state file path for the project."""
         return f"projects/{project_id}/editing_state.json"
 
-    def call(self) -> str:
+    def call(self, project_id: str) -> str:
         try:
             # Get the editing state file path
-            editing_state_path = self._get_editing_state_path(self.project_id)
+            editing_state_path = self._get_editing_state_path(project_id)
             full_path = editing_state_path
             
             # Check if file exists
             if not os.path.exists(full_path):
                 with open(full_path, 'w', encoding='utf-8') as f:
                     json.dump({
-                        "project_id": self.project_id,
+                        "project_id": project_id,
                         "tracks": []
                     }, f, ensure_ascii=False)
             
@@ -52,24 +55,24 @@ class ReadEditingStateTool:
             except json.JSONDecodeError as e:
                 return json.dumps({
                     "error": f"Invalid JSON in editing state file: {str(e)}",
-                    "project_id": self.project_id,
+                    "project_id": project_id,
                     "tracks": []
                 }, ensure_ascii=False)
                 
         except Exception as e:
             return json.dumps({
                 "error": f"Error reading editing state: {str(e)}",
-                "project_id": self.project_id,
+                "project_id": project_id,
                 "tracks": []
             }, ensure_ascii=False)
         
-    def as_tool(self) -> Tool:
+    def as_tool(self) -> StructuredTool:
         """Convert the tool to a LangGraph-compatible tool format."""
-        def tool_func(*args, **kwargs) -> str:
-            return self.call()
+        def tool_func(project_id: Annotated[str, InjectedState("project_id")]) -> str:
+            return self.call(project_id)
         
-        return Tool(
+        return StructuredTool.from_function(
+            func=tool_func,
             name=self.name,
             description=self.description,
-            func=tool_func
         )

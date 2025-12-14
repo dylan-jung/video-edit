@@ -3,6 +3,9 @@ uvicorn
 pydantic
 pydantic-settings
 google-cloud-storage
+langgraph
+langgraph[mongodb]
+langgraph.checkpoint.mongodb
 langchain-openai
 langchain-core
 openai

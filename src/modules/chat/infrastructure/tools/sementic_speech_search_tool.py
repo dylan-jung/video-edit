@@ -1,15 +1,12 @@
 import json
 import os
-from typing import Dict, List
-
-from langchain_core.tools import Tool
+from typing import Annotated, Dict, List
+from langgraph.prebuilt import InjectedState
+from langchain_core.tools import StructuredTool, Tool
 
 # from src.modules.chat.config import PROJECT_ID
-from src.shared.infrastructure.ai.speech_vector_db import SpeechVectorDB
-from src.modules.indexing.infrastructure.embedding.google_embeddings import \
-from src.modules.indexing.infrastructure.embedding.google_embeddings import \
-    GoogleEmbeddingGenerator
-from shared.infrastructure.ai.openai_embedding_service import \
+from src.shared.infrastructure.ai.vector_db_registry import VectorDBRegistry
+from src.shared.infrastructure.ai.openai_embedding_service import \
     OpenAIEmbeddingService
 
 
@@ -28,41 +25,22 @@ class SementicSpeechSearchTool:
         "Output: search_results (JSON) - list of matching speech chunks with similarity scores and metadata"
     )
 
-    def __init__(self, project_id: str):
+    def __init__(self):
         """Initialize the semantic speech search tool with embedding generator."""
-        self.project_id = project_id
-        # Try to use OpenAI embeddings first, fallback to Google embeddings
+        # Use OpenAI embeddings directly
         try:
-            if "OPENAI_API_KEY" in os.environ:
-                self.embedding_generator = OpenAIEmbeddingService()
-                self.dimension = 3072  # OpenAI text-embedding-3-large dimension
-                print("✅ Using OpenAI embeddings for speech search")
-            else:
-                self.embedding_generator = GoogleEmbeddingGenerator()
-                self.dimension = 768  # Google embedding dimension
-                print("✅ Using Google embeddings for speech search")
+            self.embedding_generator = OpenAIEmbeddingService()
+            self.dimension = 3072  # OpenAI text-embedding-3-large dimension
+            print("✅ Using OpenAI embeddings for speech search")
         except Exception as e:
             print(f"⚠️ Failed to initialize embedding generator: {e}")
-            # Use Google as fallback
-            self.embedding_generator = GoogleEmbeddingGenerator()
-            self.dimension = 768
+            raise e
 
-    def _get_vector_db_path(self, project_id: str) -> str:
-        """Get the speech vector database file path for the project."""
-        return f"projects/{project_id}/speech_vector_db.faiss"
 
-    def _load_vector_db(self, project_id: str) -> SpeechVectorDB:
-        """Load the speech vector database for the project."""
-        vector_db_path = self._get_vector_db_path(project_id)
-        
-        try:
-            vector_db = SpeechVectorDB.load(vector_db_path, dimension=self.dimension)
-            print(f"✅ Speech vector database loaded: {vector_db.get_stats()}")
-            return vector_db
-        except Exception as e:
-            print(f"❌ Failed to load speech vector database from {vector_db_path}: {e}")
-            # Return empty database if file doesn't exist
-            return SpeechVectorDB(dimension=self.dimension)
+    def _load_vector_db(self, project_id: str):
+        """Load the speech vector database from registry."""
+        registry = VectorDBRegistry.get_instance()
+        return registry.get_speech_db(project_id)
 
     def _generate_query_embedding(self, query: str):
         """Generate embedding for the search query."""
@@ -100,12 +78,13 @@ class SementicSpeechSearchTool:
         
         return formatted_results
 
-    def call(self, query: str) -> str:
+    def call(self, query: str, project_id: str) -> str:
         """
         Perform semantic speech search across audio content.
         
         Args:
             query: The search query string
+            project_id: The project ID injected from state
             
         Returns:
             JSON string containing search results
@@ -118,7 +97,7 @@ class SementicSpeechSearchTool:
         
         try:
             # Load speech vector database
-            vector_db = self._load_vector_db(self.project_id)
+            vector_db = self._load_vector_db(project_id)
             
             # Check if database has any data
             stats = vector_db.get_stats()
@@ -160,14 +139,14 @@ class SementicSpeechSearchTool:
                 "results": []
             }, ensure_ascii=False)
         
-    def as_tool(self) -> Tool:
+    def as_tool(self) -> StructuredTool:
         """Convert the tool to a LangChain-compatible tool format."""
-        def tool_func(*args, **kwargs) -> str:
-            print(f"🔍 Speech Search Tool called with args: {args}, kwargs: {kwargs}")
-            return self.call(*args, **kwargs)
+        def tool_func(query: str, project_id: Annotated[str, InjectedState("project_id")]) -> str:
+            print(f"🔍 Speech Search Tool called with query: {query}")
+            return self.call(query, project_id)
         
-        return Tool(
+        return StructuredTool.from_function(
+            func=tool_func,
             name=self.name,
             description=self.description,
-            func=tool_func
         )

@@ -1,13 +1,14 @@
 import difflib
 import json
 import os
-from typing import Any, Dict, Union
+from typing import Annotated, Any, Dict, Union
+from langgraph.prebuilt import InjectedState
 
 import jsonpatch
 from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, Field
 
-# from ..config import PROJECT_ID
+
 
 
 class WriteEditingStateInput(BaseModel):
@@ -42,14 +43,14 @@ class WriteEditingStateTool:
         "Output: None"
     )
     
-    def __init__(self, project_id: str):
-        self.project_id = project_id
+    def __init__(self):
+        pass
 
     def _get_editing_state_path(self, project_id: str) -> str:
         """Get the editing state file path for the project."""
         return f"projects/{project_id}/editing_state.json"
 
-    def call(self, patch: str) -> str:
+    def call(self, patch: str, project_id: str) -> str:
         try:
             # Parse patch string to JSON (JSON Patch 형식)
             if not patch:
@@ -60,7 +61,7 @@ class WriteEditingStateTool:
                 return "Error: Invalid JSON format in patch"
 
             # Get the editing state file path
-            editing_state_path = self._get_editing_state_path(self.project_id)
+            editing_state_path = self._get_editing_state_path(project_id)
             full_path = editing_state_path
 
             # Try to get existing editing state
@@ -73,7 +74,7 @@ class WriteEditingStateTool:
             else:
                 print(f"No existing editing state found at {full_path}, creating new one")
                 current_state = {
-                    "project_id": self.project_id,
+                    "project_id": project_id,
                     "tracks": [],
                 }
                 os.makedirs(os.path.dirname(full_path), exist_ok=True)
@@ -98,8 +99,8 @@ class WriteEditingStateTool:
 
     def as_tool(self) -> StructuredTool:
         """Convert the tool to a LangGraph-compatible tool format."""        
-        def tool_func(patch: str) -> str:
-            return self.call(patch)
+        def tool_func(patch: str, project_id: Annotated[str, InjectedState("project_id")]) -> str:
+            return self.call(patch, project_id)
         
         return StructuredTool(
             name=self.name,

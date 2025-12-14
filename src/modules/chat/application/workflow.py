@@ -55,7 +55,7 @@ def initialize_llm():
     return ChatOpenAI(**llm_config)
 
 
-def create_agent_workflow(_state_type=None, project_id: str = None, checkpointer: Any = None):
+def create_agent_workflow(_state_type=None, checkpointer: Any = None):
     """
     Create and return a ReAct-style agent executor.
 
@@ -64,28 +64,30 @@ def create_agent_workflow(_state_type=None, project_id: str = None, checkpointer
     answer the user. LangChain provides `create_react_agent`, which assembles this
     pattern from an LLM and a list of tools.
     """
-    if not project_id:
-        raise ValueError("project_id is required to create agent workflow")
 
     # Initialize the language model with the existing helper
     llm = initialize_llm()
 
     # Convert our custom ToolExecutor into LangChain‑compatible tools
-    tool_executor = ToolExecutor(project_id)
+    tool_executor = ToolExecutor()
     tools = tool_executor.as_tool()
 
     # Create system message for the agent
     from datetime import datetime
 
-    # from ..config import PROJECT_ID
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    system_message = SystemMessage(content=agent_prompt(project_id, timestamp))
+    def _state_modifier(state):
+        project_id = state.get("project_id")
+        timestamp = state.get("timestamp")
+        if not timestamp:
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            
+        return [SystemMessage(content=agent_prompt(project_id, timestamp))]
 
     # Build a ReAct agent with system message
     agent = create_react_agent(
         llm, 
         tools,
-        state_modifier=system_message,  # This ensures the system message is always included
+        state_modifier=_state_modifier,  # This ensures the system message is always included
         checkpointer=checkpointer,
     )
     return agent

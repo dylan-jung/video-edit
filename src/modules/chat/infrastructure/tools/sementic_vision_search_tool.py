@@ -1,15 +1,12 @@
 import json
 import os
-from typing import Dict, List
-
-from langchain_core.tools import Tool
+from typing import Annotated, Dict, List
+from langgraph.prebuilt import InjectedState
+from langchain_core.tools import StructuredTool, Tool
 
 # from src.modules.chat.config import PROJECT_ID
-from src.shared.infrastructure.ai.vector_db import VectorDB
-from src.modules.indexing.infrastructure.embedding.google_embeddings import \
-from src.modules.indexing.infrastructure.embedding.google_embeddings import \
-    GoogleEmbeddingGenerator
-from shared.infrastructure.ai.openai_embedding_service import \
+from src.shared.infrastructure.ai.vector_db_registry import VectorDBRegistry
+from src.shared.infrastructure.ai.openai_embedding_service import \
     OpenAIEmbeddingService
 
 
@@ -28,41 +25,23 @@ class SementicVisionSearchTool:
         "Output: search_results (JSON) - list of matching scenes with similarity scores and metadata"
     )
 
-    def __init__(self, project_id: str):
+    def __init__(self):
         """Initialize the semantic vision search tool with embedding generator."""
-        self.project_id = project_id
-        # Try to use OpenAI embeddings first, fallback to Google embeddings
+        # Use OpenAI embeddings directly
         try:
-            if "OPENAI_API_KEY" in os.environ:
-                self.embedding_generator = OpenAIEmbeddingService()
-                self.dimension = 3072  # OpenAI text-embedding-3-large dimension
-                print("✅ Using OpenAI embeddings for semantic search")
-            else:
-                self.embedding_generator = GoogleEmbeddingGenerator()
-                self.dimension = 768  # Google embedding dimension
-                print("✅ Using Google embeddings for semantic search")
+            self.embedding_generator = OpenAIEmbeddingService()
+            self.dimension = 3072 # OpenAI text-embedding-3-large dimension
+            print("✅ Using OpenAI embeddings for semantic search")
         except Exception as e:
+             # Should ideally fail loud if this is the only option, or user should ensure env var
             print(f"⚠️ Failed to initialize embedding generator: {e}")
-            # Use Google as fallback
-            self.embedding_generator = GoogleEmbeddingGenerator()
-            self.dimension = 768
+            raise e
 
-    def _get_vector_db_path(self, project_id: str) -> str:
-        """Get the vector database file path for the project."""
-        return f"projects/{project_id}/vision_vector_db.faiss"
 
-    def _load_vector_db(self, project_id: str) -> VectorDB:
-        """Load the vector database for the project."""
-        vector_db_path = self._get_vector_db_path(project_id)
-        
-        try:
-            vector_db = VectorDB.load(vector_db_path, dimension=self.dimension)
-            print(f"✅ Vector database loaded: {vector_db.get_stats()}")
-            return vector_db
-        except Exception as e:
-            print(f"❌ Failed to load vector database from {vector_db_path}: {e}")
-            # Return empty database if file doesn't exist
-            return VectorDB(dimension=self.dimension)
+    def _load_vector_db(self, project_id: str):
+        """Load the vector database from registry."""
+        registry = VectorDBRegistry.get_instance()
+        return registry.get_vision_db(project_id)
 
     def _generate_query_embedding(self, query: str):
         """Generate embedding for the search query."""
@@ -101,12 +80,13 @@ class SementicVisionSearchTool:
         
         return formatted_results
 
-    def call(self, query: str) -> str:
+    def call(self, query: str, project_id: str) -> str:
         """
         Perform semantic vision search across video scenes.
         
         Args:
             query: The search query string
+            project_id: The project ID injected from state
             
         Returns:
             JSON string containing search results
@@ -119,7 +99,7 @@ class SementicVisionSearchTool:
         
         try:
             # Load vector database
-            vector_db = self._load_vector_db(self.project_id)
+            vector_db = self._load_vector_db(project_id)
             
             # Check if database has any data
             stats = vector_db.get_stats()
@@ -161,14 +141,14 @@ class SementicVisionSearchTool:
                 "results": []
             }, ensure_ascii=False)
         
-    def as_tool(self) -> Tool:
+    def as_tool(self) -> StructuredTool:
         """Convert the tool to a LangChain-compatible tool format."""
-        def tool_func(*args, **kwargs) -> str:
-            print(f"🔍 Tool called with args: {args}, kwargs: {kwargs}")
-            return self.call(*args, **kwargs)
+        def tool_func(query: str, project_id: Annotated[str, InjectedState("project_id")]) -> str:
+            print(f"🔍 Tool called with query: {query}")
+            return self.call(query, project_id)
         
-        return Tool(
+        return StructuredTool.from_function(
+            func=tool_func,
             name=self.name,
             description=self.description,
-            func=tool_func
         )

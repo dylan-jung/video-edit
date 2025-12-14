@@ -6,36 +6,31 @@ from typing import List, Dict, Any, AsyncGenerator
 
 import os
 from langchain_core.messages import HumanMessage
-from pymongo import MongoClient
-from langgraph.checkpoint.mongodb import MongoDBSaver
-from src.modules.chat.config import PROJECT_ID
+# from pymongo import MongoClient  <-- Removed
+# from langgraph.checkpoint.mongodb import MongoDBSaver <-- Removed
 from src.modules.chat.application.workflow import create_agent_workflow
 from src.modules.chat.domain.state import AgentState
 from src.modules.chat.application.prompt import agent_prompt
 
 logger = logging.getLogger(__name__)
 
-# Default to localhost for local dev, override in production
-MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
 
 class AgentService:
-    def __init__(self, project_id: str = PROJECT_ID):
+    def __init__(self, project_id: str, checkpointer: Any):
         self.project_id = project_id
+        self.checkpointer = checkpointer
         self.timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        # Note: Graph with checkpointer is created per-request/connection logic usually
-        # but we can initialize the base graph components here or just lazily.
 
     async def chat(self, user_input: str, thread_id: str) -> AsyncGenerator[Dict[str, Any], None]:
         """
         Processes user input and yields streaming responses (tokens or status updates).
         """
         try:
-            # Setup checkpointer
-            client = MongoClient(MONGO_URI)
-            checkpointer = MongoDBSaver(client)
-            
-            # Create graph with checkpointer
-            agent_graph = create_agent_workflow(AgentState, project_id=self.project_id, checkpointer=checkpointer)
+            # Create graph with injected checkpointer
+            agent_graph = create_agent_workflow(
+                AgentState, 
+                checkpointer=self.checkpointer
+            )
             
             config = {"configurable": {"thread_id": thread_id}}
             

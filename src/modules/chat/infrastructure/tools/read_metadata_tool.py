@@ -1,11 +1,12 @@
 # tools/read_video_metadata.py
 import json
-from typing import Any, Dict, Union
+from typing import Annotated, Any, Dict, Union
 
-from langchain_core.tools import Tool
+from langchain_core.tools import StructuredTool, Tool
+from langgraph.prebuilt import InjectedState
 
 from src.shared.infrastructure.storage.gcp_video_repository import GCPVideoRepository
-from src.shared.infrastructure.storage.repository import Repository
+from src.shared.application.ports.video_repository import VideoRepositoryPort
 from src.shared.utils.get_video_id import get_video_id
 
 
@@ -23,25 +24,22 @@ class ReadVideoMetadataTool:
         "Output: metadata (JSON) - the metadata of the video"
     )
     
-    def __init__(self, project_id: str):
-        self.project_id = project_id
-        self.repository: Repository = GCPVideoRepository()
+    def __init__(self):
+        self.repository: VideoRepositoryPort = GCPVideoRepository()
 
-    def call(self, video_id: str) -> str:
-        metadata_bytes = self.repository.get_video_metadata(self.project_id, video_id)
+    def call(self, video_id: str, project_id: str) -> str:
+        metadata_bytes = self.repository.get_video_metadata(project_id, video_id)
         metadata = json.loads(metadata_bytes)
 
         # Tool-calling 프로토콜에 맞춰 항상 문자열(JSON)로 반환
         return json.dumps(metadata, ensure_ascii=False)
     
-    def as_tool(self) -> Tool:
-        def tool_func(*args, **kwargs) -> str:
-            # LangChain이 video_id를 args[0]이나 kwargs에서 전달할 수 있음
-            video_id = args[0] if args else kwargs.get('video_id', '')
-            return self.call(video_id)
+    def as_tool(self) -> StructuredTool:
+        def tool_func(video_id: str, project_id: Annotated[str, InjectedState("project_id")]) -> str:
+            return self.call(video_id, project_id)
         
-        return Tool(
+        return StructuredTool.from_function(
+            func=tool_func,
             name=self.name,
             description=self.description,
-            func=tool_func
         )

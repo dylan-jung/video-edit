@@ -1,11 +1,12 @@
 import json
 import os
-from typing import List
+from typing import Annotated, List
+from langgraph.prebuilt import InjectedState
 
 from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, Field
 
-# from src.modules.chat.config import PROJECT_ID
+
 from src.shared.infrastructure.video import extract_video_chunk_frames
 
 
@@ -34,8 +35,7 @@ class ReadVideoTool:
         "Output: List of base64 encoded frame strings from the specified video segment"
     )
 
-    def __init__(self, project_id: str):
-        self.project_id = project_id
+    def __init__(self):
         # Token estimation constants (approximate)
         self.tokens_per_frame = 1500  # Estimated tokens per image frame
         self.max_frames_per_call = 30  # Limit to avoid rate limits
@@ -59,7 +59,7 @@ class ReadVideoTool:
         
         # Check if video_id is a direct filename in project root
         # TODO: 비디오 파일 cloud storage에서 읽어오기
-        video_path = self._validate_video_path(video_id)
+        video_path = self._validate_video_path(video_id, project_id)
         self._validate_fps(fps)
         
         # Validate time format (basic check)
@@ -134,13 +134,13 @@ class ReadVideoTool:
         max_end_seconds = start_seconds + max_duration
         return seconds_to_time(max_end_seconds)
 
-    def _validate_video_path(self, video_id: str) -> str:
+    def _validate_video_path(self, video_id: str, project_id: str) -> str:
         """
         Validate video path
         """
         project_root = os.getcwd()
-        if os.path.exists(os.path.join(project_root, "projects", self.project_id, video_id, "video.mp4")):
-            return os.path.join(project_root, "projects", self.project_id, video_id, "video.mp4")
+        if os.path.exists(os.path.join(project_root, "projects", project_id, video_id, "video.mp4")):
+            return os.path.join(project_root, "projects", project_id, video_id, "video.mp4")
         else:
             raise ValueError(f"찾을 수 없는 비디오 파일: {video_id}")
 
@@ -171,9 +171,9 @@ class ReadVideoTool:
             return False
 
     def as_tool(self) -> StructuredTool:
-        def tool_func(video_id: str, start_time: str, end_time: str, fps: float = 1) -> str:
+        def tool_func(video_id: str, start_time: str, end_time: str, project_id: Annotated[str, InjectedState("project_id")], fps: float = 1) -> str:
             print(f"🔍 Tool called with video_id: {video_id}, start_time: {start_time}, end_time: {end_time}, fps: {fps}")
-            return self.call(video_id, start_time, end_time, fps)
+            return self.call(video_id, start_time, end_time, fps, project_id)
         
         return StructuredTool(
             name=self.name,

@@ -1,10 +1,11 @@
 import json
-from typing import Any, Dict, Union
+from typing import Annotated, Any, Dict, Union
 
-from langchain_core.tools import Tool
+from langchain_core.tools import StructuredTool, Tool
+from langgraph.prebuilt import InjectedState
 
 from src.shared.infrastructure.storage.gcp_video_repository import GCPVideoRepository
-from src.shared.infrastructure.storage.repository import Repository
+from src.shared.application.ports.video_repository import VideoRepositoryPort
 # from src.modules.chat.config import PROJECT_ID
 from src.shared.utils.get_video_id import get_video_id
 
@@ -24,30 +25,20 @@ class ReadVideoSceneDescriptionsTool:
         "Output: scene_descriptions (JSON) - the scene descriptions of the video"
     )
     
-    def __init__(self, project_id: str):
-        self.project_id = project_id
-        self.repository: Repository = GCPVideoRepository()
+    def __init__(self):
+        self.repository: VideoRepositoryPort = GCPVideoRepository()
 
-    def _get_scene_descriptions(self, video_id: str) -> str:
-        with open(f"projects/{self.project_id}/{video_id}/scene_descriptions.json", "r") as f:
-            scene_descriptions = json.load(f)
-        # scene_descriptions_bytes = self.repository.get_video_scene_descriptions(self.project_id, video_id)
-        # scene_descriptions = json.loads(scene_descriptions_bytes)
-        return scene_descriptions
-
-    def call(self, video_id: str) -> str:
-        scene_descriptions = self._get_scene_descriptions(video_id)
-        return json.dumps(scene_descriptions, ensure_ascii=False)
+    def call(self, video_id: str, project_id: str) -> str:
+        final_scene_descriptions = self.repository.get_video_scene_descriptions(project_id, video_id)
+        return json.dumps(final_scene_descriptions, ensure_ascii=False)
         
-    def as_tool(self) -> Tool:
+    def as_tool(self) -> StructuredTool:
         """Convert the tool to a LangGraph-compatible tool format."""
-        def tool_func(*args, **kwargs) -> str:
-            # LangChain이 video_id를 args[0]이나 kwargs에서 전달할 수 있음
-            video_id = args[0] if args else kwargs.get('video_id', '')
-            return self.call(video_id)
+        def tool_func(video_id: str, project_id: Annotated[str, InjectedState("project_id")]) -> str:
+            return self.call(video_id, project_id)
         
-        return Tool(
+        return StructuredTool.from_function(
+            func=tool_func,
             name=self.name,
             description=self.description,
-            func=tool_func
         )
