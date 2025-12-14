@@ -18,3 +18,7 @@ class JobRepositoryPort(ABC):
     @abstractmethod
     async def get_job(self, job_id: str) -> Optional[IndexingJob]:
         pass
+
+    @abstractmethod
+    async def find_active_job_by_video_id(self, video_id: str) -> Optional[IndexingJob]:
+        pass

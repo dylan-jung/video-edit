@@ -1,6 +1,7 @@
 from typing import Optional
-from pydantic import BaseModel
+from dataclasses import dataclass
 
-class SceneObject(BaseModel):
+@dataclass
+class SceneObject:
     name: str
     detail: Optional[str] = None

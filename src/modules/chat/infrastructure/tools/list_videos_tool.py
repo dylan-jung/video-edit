@@ -3,7 +3,7 @@ from typing import Any, Dict
 
 from langchain_core.tools import Tool
 
-from src.shared.infrastructure.repository.storage import CloudStorageRepository
+from src.shared.infrastructure.storage.gcp_video_repository import GCPVideoRepository
 
 class ListVideosTool:
     """
@@ -21,7 +21,7 @@ class ListVideosTool:
     
     def __init__(self, project_id: str):
         self.project_id = project_id
-        self.repository = CloudStorageRepository()
+        self.repository = GCPVideoRepository()
 
     def call(self) -> str:
         video_ids = self.repository.list_videos(self.project_id)

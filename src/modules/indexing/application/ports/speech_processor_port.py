@@ -3,7 +3,7 @@ from typing import Dict, List, Any
 
 class SpeechProcessorPort(ABC):
     @abstractmethod
-    def process_audio(self, audio_path: str) -> List[Dict[str, Any]]:
+    def run(self, audio_path: str) -> List[Dict[str, Any]]:
         """
         Process audio file (split, transcribe) and return chunks.
         """

@@ -9,7 +9,7 @@ from src.shared.infrastructure.ai.speech_vector_db import SpeechVectorDB
 from src.modules.indexing.infrastructure.embedding.google_embeddings import \
 from src.modules.indexing.infrastructure.embedding.google_embeddings import \
     GoogleEmbeddingGenerator
-from src.modules.indexing.infrastructure.adapters.openai_embedding_service import \
+from shared.infrastructure.ai.openai_embedding_service import \
     OpenAIEmbeddingService
 
 

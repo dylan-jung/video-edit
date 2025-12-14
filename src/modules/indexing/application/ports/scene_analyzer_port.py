@@ -4,7 +4,7 @@ from src.modules.indexing.domain.scene import Scene
 
 class SceneAnalyzerPort(ABC):
     @abstractmethod
-    def analyze_scenes(self, video_path: str, chunk_duration: int = 300) -> List[Scene]:
+    def run(self, video_path: str, chunk_duration: int = 300) -> List[Scene]:
         """
         Analyze video scenes and return a list of Scene objects.
         

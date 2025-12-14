@@ -3,8 +3,8 @@ from typing import Any, Dict, Union
 
 from langchain_core.tools import Tool
 
-from src.shared.infrastructure.repository.storage import CloudStorageRepository
-from src.shared.infrastructure.repository.repository import Repository
+from src.shared.infrastructure.storage.gcp_video_repository import GCPVideoRepository
+from src.shared.infrastructure.storage.repository import Repository
 # from src.modules.chat.config import PROJECT_ID
 from src.shared.utils.get_video_id import get_video_id
 
@@ -26,7 +26,7 @@ class ReadVideoTranscriptionTool:
 
     def __init__(self, project_id: str):
         self.project_id = project_id
-        self.repository: Repository = CloudStorageRepository()
+        self.repository: Repository = GCPVideoRepository()
 
     def call(self, video_id: str) -> str:
         with open(f"projects/{self.project_id}/{video_id}/transcription.json", "r") as f:

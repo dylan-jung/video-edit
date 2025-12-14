@@ -8,7 +8,7 @@ class SceneIndexer(SceneIndexerPort):
     def __init__(self, embedding_service: EmbeddingPort):
         self.embedding_service = embedding_service
 
-    def index_scenes(self, project_id: str, video_id: str, scene_descriptions_path: str, vector_db_url: str):
+    def run(self, project_id: str, video_id: str, scene_descriptions_path: str, vector_db_url: str):
         """
         Scene indexing function that creates embeddings and stores them in vector database.
         
@@ -47,5 +47,4 @@ class SceneIndexer(SceneIndexerPort):
                 
         except Exception as e:
             print(f"장면 인덱싱 실패: {str(e)}")
-            # 인덱싱 실패해도 파이프라인 계속 진행
-            pass
+            raise e

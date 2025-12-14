@@ -8,11 +8,11 @@ logger = logging.getLogger(__name__)
 
 class JobPoller:
     def __init__(self, 
-                 repository: JobRepositoryPort, 
+                 job_repository: JobRepositoryPort,
                  orchestrator: PipelineOrchestrator, 
                  max_concurrency: int = 2,
                  poll_interval: float = 1.0):
-        self.repository = repository
+        self.job_repository = job_repository
         self.orchestrator = orchestrator
         self.semaphore = asyncio.Semaphore(max_concurrency)
         self.poll_interval = poll_interval
@@ -30,7 +30,7 @@ class JobPoller:
                     continue
 
                 # Try to acquire a job
-                job = await self.repository.acquire_next_pending_job()
+                job = await self.job_repository.acquire_next_pending_job()
                 if job:
                     logger.info(f"Acquired job {job.id}. Starting processing...")
                     await self.semaphore.acquire()
@@ -45,25 +45,19 @@ class JobPoller:
 
     async def _process_job(self, job: IndexingJob):
         try:
-            # Assuming orchestrator.run_pipeline takes project_id and video_id
-            # We might need to map other fields if run_pipeline signature differs
             logger.info(f"Processing job {job.id} for video {job.video_id}")
-            
-            # Use run_pipeline. Since user previously refactored this, I assume it accepts what's needed.
-            # I checked the signature in the previous step.
+
             await self.orchestrator.run_pipeline(
                 project_id=job.project_id,
                 video_id=job.video_id,
-                bucket_name=job.bucket,
-                object_name=job.object_name
             )
             
-            await self.repository.update_status(job.id, IndexingJobStatus.DONE)
+            await self.job_repository.update_status(job.id, IndexingJobStatus.DONE)
             logger.info(f"Job {job.id} completed successfully.")
             
         except Exception as e:
             logger.error(f"Job {job.id} failed: {e}", exc_info=True)
-            await self.repository.update_status(job.id, IndexingJobStatus.FAILED, error_message=str(e))
+            await self.job_repository.update_status(job.id, IndexingJobStatus.FAILED, error_message=str(e))
         finally:
             self.semaphore.release()
 

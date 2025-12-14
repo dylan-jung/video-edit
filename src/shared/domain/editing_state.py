@@ -1,7 +1,8 @@
 from typing import List
-from pydantic import BaseModel
+from dataclasses import dataclass
 from .track import Track
 
-class EditingState(BaseModel):
+@dataclass
+class EditingState:
     project_id: str
     tracks: List[Track]

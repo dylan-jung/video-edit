@@ -1,3 +1,0 @@
-name: video-indexer-infrastructure
-runtime: python
-description: GCP Infrastructure for Video Indexing Pipeline

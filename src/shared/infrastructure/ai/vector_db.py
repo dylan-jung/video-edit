@@ -131,27 +131,28 @@ class VectorDB:
     
     def save(self, filepath: str):
         """
-        벡터 데이터베이스를 파일로 저장
+        벡터 데이터베이스를 파일로 저장 (Index + Metadata Sidecar)
         
         Args:
-            filepath: 저장할 파일 경로 (.faiss 확장자)
+            filepath: 저장할 파일 경로 (.faiss)
         """
-        # FAISS 인덱스 저장
-        index_path = filepath.replace('.faiss', '_index.faiss')
-        faiss.write_index(self.index, index_path)
+        # 1. Main File: FAISS Index
+        # 이 파일이 존재해야 Orchestrator의 exist 체크를 통과함
+        # 또한 표준 FAISS 도구로 읽을 수 있음
+        faiss.write_index(self.index, filepath)
         
-        # 메타데이터 저장
+        # 2. Sidecar File: Metadata
         metadata = {
             'video_metadata': self.video_metadata,
             'scene_metadata': self.scene_metadata,
             'dimension': self.dimension
         }
         
-        metadata_path = filepath.replace('.faiss', '_metadata.pkl')
+        metadata_path = f"{filepath}.metadata"
         with open(metadata_path, 'wb') as f:
             pickle.dump(metadata, f)
         
-        print(f"벡터 데이터베이스가 {filepath}에 저장되었습니다")
+        print(f"벡터 데이터베이스가 저장되었습니다:\n- Index: {filepath}\n- Metadata: {metadata_path}")
     
     @classmethod
     def load(cls, filepath: str, dimension: int = 768) -> 'VectorDB':
@@ -159,36 +160,58 @@ class VectorDB:
         파일에서 벡터 데이터베이스 로드
         
         Args:
-            filepath: 로드할 파일 경로 (.faiss 확장자)
+            filepath: 로드할 파일 경로 (.faiss)
             
         Returns:
             로드된 VectorDB 인스턴스
         """
-        # 메타데이터 로드
-        metadata_path = filepath.replace('.faiss', '_metadata.pkl')
-        print(f"metadata_path: {metadata_path}")
+        metadata_path = f"{filepath}.metadata"
+        
+        # 1. Load Metadata
         if not os.path.exists(metadata_path):
-            # 파일이 없으면 새 인스턴스 생성
+             # Try legacy fallback (pre-fix naming)
+             legacy_meta = filepath.replace('.faiss', '_metadata.pkl')
+             if os.path.exists(legacy_meta):
+                 metadata_path = legacy_meta
+             else:
+                 print(f"메타데이터 파일을 찾을 수 없어 새로 생성합니다: {filepath}")
+                 return cls(dimension=dimension)
+
+        try:
+            with open(metadata_path, 'rb') as f:
+                metadata = pickle.load(f)
+        except Exception as e:
+            print(f"메타데이터 로드 실패: {e}")
             return cls(dimension=dimension)
+            
+        # 2. Load Index
+        # filepath points to the main .faiss file now
+        if not os.path.exists(filepath):
+            # Try legacy fallback
+            legacy_index = filepath.replace('.faiss', '_index.faiss')
+            if os.path.exists(legacy_index):
+                filepath = legacy_index
+            else:
+                # If metadata exists but index doesn't, create empty index with correct dim
+                print("인덱스 파일 없음, 빈 인덱스로 초기화")
+                db = cls(metadata.get('dimension', dimension))
+                db.video_metadata = metadata['video_metadata']
+                db.scene_metadata = metadata['scene_metadata']
+                return db
+
+        try:
+            index = faiss.read_index(filepath)
+        except Exception as e:
+             print(f"FAISS 인덱스 읽기 실패 ({filepath}): {e}")
+             return cls(dimension=dimension)
         
-        with open(metadata_path, 'rb') as f:
-            metadata = pickle.load(f)
-        
-        # FAISS 인덱스 로드
-        index_path = filepath.replace('.faiss', '_index.faiss')
-        print(f"index_path: {index_path}")
-        if os.path.exists(index_path):
-            index = faiss.read_index(index_path)
-        else:
-            index = faiss.IndexFlatIP(metadata['dimension'])
-        
-        # 인스턴스 복원
-        db = cls(metadata['dimension'])
+        # 3. Reconstruct
+        db = cls(metadata.get('dimension', dimension))
         db.index = index
         db.video_metadata = metadata['video_metadata']
         db.scene_metadata = metadata['scene_metadata']
         
-        print(f"벡터 데이터베이스가 {filepath}에서 로드되었습니다 (총 {db.index.ntotal}개 벡터)")
+        print(f"벡터 데이터베이스 로드 완료 ({db.index.ntotal} vectors)")
         return db
     
     def get_stats(self) -> Dict:

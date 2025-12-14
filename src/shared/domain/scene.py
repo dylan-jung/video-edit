@@ -1,9 +1,10 @@
 from typing import List
-from pydantic import BaseModel
+from dataclasses import dataclass
 from .scene_object import SceneObject
 from .scene_highlight import SceneHighlight
 
-class Scene(BaseModel):
+@dataclass
+class Scene:
     background: str
     objects: List[SceneObject]
     ocr_text: List[str]

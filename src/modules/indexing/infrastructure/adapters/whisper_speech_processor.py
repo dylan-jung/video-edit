@@ -1,3 +1,4 @@
+import logging
 import os
 import json
 import openai
@@ -5,6 +6,8 @@ from typing import List, Dict, Any
 
 from src.modules.indexing.application.ports.speech_processor_port import SpeechProcessorPort
 from src.modules.indexing.infrastructure.utils.audio_utils import split_audio_chunks, format_timestamp, get_audio_duration
+
+logger = logging.getLogger(__name__)
 
 class WhisperSpeechProcessor(SpeechProcessorPort):
     def __init__(self, transcription_model: str = "whisper-1", enhancement_model: str = "gpt-4o-mini"):
@@ -84,7 +87,7 @@ class WhisperSpeechProcessor(SpeechProcessorPort):
             'language': 'ko'  # metadata not passed deeply, assuming ko
         }
 
-    def process_audio(self, audio_path: str) -> List[Dict[str, Any]]:
+    def run(self, audio_path: str) -> List[Dict[str, Any]]:
         """
         Process audio file (split, transcribe) and return SEMANTIC chunks.
         Note: Original logic returned 'transcription_data', but we return chunks for better flow.
@@ -132,8 +135,10 @@ class WhisperSpeechProcessor(SpeechProcessorPort):
 - 사용자가 질문할만한 최대한 많은 요약을 만들어주세요.
 
 # 출력 형식
-각 의미 덩어리에 대해 다음 JSON 형식으로 정리해주세요:
+반드시 **JSON 리스트** 형식으로 출력해야 합니다.
+예: [{{...}}, {{...}}]
 
+각 의미 덩어리는 다음 구조를 가집니다:
 {{
 "summary": "해당 발화 묶음의 핵심 내용을 1~2문장으로 요약",
 "keywords": ["이 텍스트에서 중요한 단어 또는 개념"],
@@ -152,7 +157,7 @@ class WhisperSpeechProcessor(SpeechProcessorPort):
         response = openai.chat.completions.create(
             model=self.enhancement_model,
             messages=[
-                {"role": "system", "content": "당신은 음성 전사 텍스트를 분석하고 시멘틱 서치를 위해 최적화하는 전문가입니다. 항상 JSON 형식으로 응답하세요."},
+                {"role": "system", "content": "당신은 음성 전사 텍스트를 분석하고 시멘틱 서치를 위해 최적화하는 전문가입니다. 항상 JSON 리스트 형식으로만 응답하세요."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.3
@@ -164,7 +169,27 @@ class WhisperSpeechProcessor(SpeechProcessorPort):
             if "```json" in gpt_response:
                 gpt_response = gpt_response.split("```json")[1].split("```")[0]
             
-            return json.loads(gpt_response)
+            parsed_response = json.loads(gpt_response)
+            
+            logger.info(f"GPT Response: {parsed_response}")
+            # Robust parsing: ensure we return a list of dicts
+            if isinstance(parsed_response, list):
+                if all(isinstance(item, dict) for item in parsed_response):
+                    return parsed_response
+                else:
+                    print("Warn: GPT returned list containing non-dict items. Falling back to original chunks.")
+                    return chunks
+            elif isinstance(parsed_response, dict):
+                # If wrapped in a key like "chunks" or "result", extract if possible, else wrap
+                # Heuristic: check values for list of dicts
+                for key, value in parsed_response.items():
+                    if isinstance(value, list) and len(value) > 0 and all(isinstance(item, dict) for item in value):
+                        return value
+                # Fallback: wrap the dict if it looks like a single chunk item
+                return [parsed_response]
+            
+            return chunks # Fallback if neither list nor dict
+            
         except Exception as e:
             print(f"GPT Enhancement parsing failed: {e}")
             return chunks # Fallback

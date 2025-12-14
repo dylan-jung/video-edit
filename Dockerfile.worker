@@ -1,4 +1,4 @@
-FROM python:3.9-slim
+FROM python:3.11-slim
 
 # Install system dependencies (ffmpeg is often needed for video/audio processing)
 RUN apt-get update && apt-get install -y \
@@ -21,4 +21,4 @@ ENV PYTHONPATH=/app
 
 # Run the web service on container startup.
 # Port 8080 is the default for Cloud Run
-CMD ["uvicorn", "src.cmd.worker.main:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["uvicorn", "src.modules.indexing.main:app", "--host", "0.0.0.0", "--port", "8080"]

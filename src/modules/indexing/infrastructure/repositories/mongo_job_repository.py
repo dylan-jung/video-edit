@@ -1,17 +1,17 @@
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from pymongo import ReturnDocument
+from motor.motor_asyncio import AsyncIOMotorDatabase
+
 from src.modules.indexing.domain.indexing_job import IndexingJob, IndexingJobStatus
-from src.shared.infrastructure.db import get_db
 from src.modules.indexing.application.ports.job_repository_port import JobRepositoryPort
 
 class MongoIndexingJobRepository(JobRepositoryPort):
-    def __init__(self):
-        self.db = get_db()
-        self.collection = self.db.index_jobs
+    def __init__(self, db: AsyncIOMotorDatabase):
+        self.collection = db.index_jobs
 
     async def create_job(self, job: IndexingJob) -> IndexingJob:
-        job_dict = job.model_dump(by_alias=True)
+        job_dict = job.model_dump()
         job_dict["_id"] = job.id
         await self.collection.insert_one(job_dict)
         return job
@@ -25,7 +25,7 @@ class MongoIndexingJobRepository(JobRepositoryPort):
             {
                 "$set": {
                     "status": IndexingJobStatus.PROCESSING.value,
-                    "updated_at": datetime.utcnow()
+                    "updated_at": datetime.now(timezone.utc)
                 }
             },
             sort=[("created_at", 1)],  # FIFO
@@ -33,13 +33,13 @@ class MongoIndexingJobRepository(JobRepositoryPort):
         )
         
         if job_doc:
-            return IndexingJob(**job_doc)
+            return self.doc_to_indexing_job(job_doc)
         return None
 
     async def update_status(self, job_id: str, status: IndexingJobStatus, error_message: str = None):
         update_data = {
             "status": status.value,
-            "updated_at": datetime.utcnow()
+            "updated_at": datetime.now(timezone.utc)
         }
         if error_message:
             update_data["error_message"] = error_message
@@ -52,5 +52,22 @@ class MongoIndexingJobRepository(JobRepositoryPort):
     async def get_job(self, job_id: str) -> Optional[IndexingJob]:
         doc = await self.collection.find_one({"_id": job_id})
         if doc:
-            return IndexingJob(**doc)
+            return self.doc_to_indexing_job(doc)
         return None
+
+    async def find_active_job_by_video_id(self, video_id: str) -> Optional[IndexingJob]:
+        """
+        Finds a job for the given video_id that is either PENDING or PROCESSING.
+        """
+        doc = await self.collection.find_one({
+            "video_id": video_id,
+            "status": {"$in": [IndexingJobStatus.PENDING.value, IndexingJobStatus.PROCESSING.value]}
+        })
+        if doc:
+            return self.doc_to_indexing_job(doc)
+        return None
+
+    def doc_to_indexing_job(self, doc: dict) -> IndexingJob:
+        _id = doc.pop("_id", None)
+        doc["id"] = _id
+        return IndexingJob(**doc)

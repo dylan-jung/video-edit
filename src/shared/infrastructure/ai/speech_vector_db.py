@@ -230,22 +230,21 @@ class SpeechVectorDB:
         Args:
             filepath: 저장할 파일 경로 (.faiss 확장자)
         """
-        # FAISS 인덱스 저장
-        index_path = filepath.replace('.faiss', '_index.faiss')
-        faiss.write_index(self.index, index_path)
+        # 1. Main File: FAISS Index
+        faiss.write_index(self.index, filepath)
         
-        # 메타데이터 저장
+        # 2. Sidecar File: Metadata
         metadata = {
             'video_metadata': self.video_metadata,
             'speech_metadata': self.speech_metadata,
             'dimension': self.dimension
         }
         
-        metadata_path = filepath.replace('.faiss', '_metadata.pkl')
+        metadata_path = f"{filepath}.metadata"
         with open(metadata_path, 'wb') as f:
             pickle.dump(metadata, f)
         
-        print(f"음성 벡터 데이터베이스가 {filepath}에 저장되었습니다")
+        print(f"음성 벡터 데이터베이스가 저장되었습니다:\n- Index: {filepath}\n- Metadata: {metadata_path}")
     
     @classmethod
     def load(cls, filepath: str, dimension: int = 768) -> 'SpeechVectorDB':
@@ -259,26 +258,46 @@ class SpeechVectorDB:
         Returns:
             로드된 SpeechVectorDB 인스턴스
         """
-        # 메타데이터 로드
-        metadata_path = filepath.replace('.faiss', '_metadata.pkl')
-        print(f"metadata_path: {metadata_path}")
+        metadata_path = f"{filepath}.metadata"
+        
+        # 1. Load Metadata
         if not os.path.exists(metadata_path):
-            # 파일이 없으면 새 인스턴스 생성
+             # Try legacy fallback (pre-fix naming)
+             legacy_meta = filepath.replace('.faiss', '_metadata.pkl')
+             if os.path.exists(legacy_meta):
+                 metadata_path = legacy_meta
+             else:
+                 print(f"메타데이터 파일을 찾을 수 없어 새로 생성합니다: {filepath}")
+                 return cls(dimension=dimension)
+        
+        try:
+            with open(metadata_path, 'rb') as f:
+                metadata = pickle.load(f)
+        except Exception as e:
+            print(f"메타데이터 로드 실패: {e}")
+            return cls(dimension=dimension)
+            
+        # 2. Load Index
+        if not os.path.exists(filepath):
+            # Try legacy fallback
+            legacy_index = filepath.replace('.faiss', '_index.faiss')
+            if os.path.exists(legacy_index):
+                filepath = legacy_index
+            else:
+                print("인덱스 파일 없음, 빈 인덱스로 초기화")
+                db = cls(metadata.get('dimension', dimension))
+                db.video_metadata = metadata['video_metadata']
+                db.speech_metadata = metadata['speech_metadata']
+                return db
+        
+        try:
+            index = faiss.read_index(filepath)
+        except Exception as e:
+            print(f"FAISS 인덱스 읽기 실패 ({filepath}): {e}")
             return cls(dimension=dimension)
         
-        with open(metadata_path, 'rb') as f:
-            metadata = pickle.load(f)
-        
-        # FAISS 인덱스 로드
-        index_path = filepath.replace('.faiss', '_index.faiss')
-        print(f"index_path: {index_path}")
-        if os.path.exists(index_path):
-            index = faiss.read_index(index_path)
-        else:
-            index = faiss.IndexFlatIP(metadata['dimension'])
-        
-        # 인스턴스 복원
-        db = cls(metadata['dimension'])
+        # 3. Reconstruct
+        db = cls(metadata.get('dimension', dimension))
         db.index = index
         db.video_metadata = metadata['video_metadata']
         db.speech_metadata = metadata['speech_metadata']

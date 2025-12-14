@@ -1,10 +1,8 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
 from typing import Optional
-import os
 
 class CommonSettings(BaseSettings):
-    PROJECT_ID: str = "test"
     DEBUG: bool = False
     
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
@@ -16,13 +14,18 @@ class GCPSettings(BaseSettings):
     
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
+class ReplicateSettings(BaseSettings):
+    REPLICATE_API_TOKEN: str
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
 class DBSettings(BaseSettings):
-    MONGO_URI: str = "mongodb://localhost:27017"
+    MONGO_URI: str
     DB_NAME: str = "video_edit"
     
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-class Settings(CommonSettings, GCPSettings, DBSettings):
+class Settings(CommonSettings, GCPSettings, ReplicateSettings, DBSettings):
     """
     Main settings class.
     """

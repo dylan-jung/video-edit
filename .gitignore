@@ -25,6 +25,7 @@ keyframes/*
 gcp-service-key.json
 projects
 
+.env
 .env.local
 .env.*
 .env.local
@@ -34,3 +35,8 @@ projects
 
 .cursorrules
 .DS_Store
+
+.idea
+.gcp-sa-key.json
+
+projects

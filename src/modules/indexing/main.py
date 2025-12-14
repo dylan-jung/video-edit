@@ -3,8 +3,8 @@ import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
-from src.modules.indexing.application.orchestrator import PipelineOrchestrator
 from src.modules.indexing.infrastructure.job_poller import JobPoller
+from .api.router import router as indexing_router
 
 from .dependencies import (
     get_indexing_job_repository,
@@ -44,6 +44,8 @@ async def lifespan(app: FastAPI):
             poller.stop()
 
 app = FastAPI(lifespan=lifespan)
+
+app.include_router(indexing_router, prefix="/api/v1", tags=["indexing"])
 
 @app.get("/health")
 async def health_check():
