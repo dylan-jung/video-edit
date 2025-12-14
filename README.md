@@ -15,12 +15,12 @@
 graph TD
     User[User / Client] -->|REST / SSE| API_Server[Server Module]
     API_Server -->|Invoke| Chat_Module[Chat Component]
-    API_Server -->|Enqueue| MongoDB[(MongoDB: index_jobs)]
+
+    Worker -->|Enqueue| MongoDB[(MongoDB: index_jobs)]
+    Worker[Worker Module] -->|"Poll (Periodic)"| MongoDB
+    Worker -->|Execute| Indexing_Orchestrator["Pipeline Orchestrator"]
     
-    Worker[Worker Module] -->|Poll (Periodic)| MongoDB
-    Worker -->|Execute| Indexing_Orchestrator[Pipeline Orchestrator]
-    
-    Chat_Module -->|Read| GCS[(Cloud Storage)]
+    Chat_Module -->|Read| GCS["(Cloud Storage)"]
     Indexing_Orchestrator -->|Read/Write| GCS
 ```
 
