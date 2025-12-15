@@ -1,6 +1,6 @@
 # 프로젝트 아키텍처 및 상세 설계 (Advanced Project Architecture & Design)
 
-본 문서는 지능형 비디오 편집 어시스턴트 프로젝트의 구현을 위한 상세 설계 문서입니다. **Modular Monolith** 아키텍처를 채택하여 도메인 간 결합도를 낮추고 확장성을 보장합니다.
+본 문서는 지능형 비디오 편집 어시스턴트 프로젝트의 구현을 위한 상세 설계 문서입니다.
 
 ---
 
@@ -14,13 +14,15 @@
 ```mermaid
 graph TD
     User[User / Client] -->|REST / SSE| API_Server[Server Module]
+    User[User / Client] -->|Schedule Job| Worker
     API_Server -->|Invoke| Chat_Module[Chat Component]
 
-    Worker -->|Enqueue| MongoDB[(MongoDB: index_jobs)]
+    Worker -->|Enqueue| MongoDB[(MongoDB)]
     Worker[Worker Module] -->|"Poll (Periodic)"| MongoDB
     Worker -->|Execute| Indexing_Orchestrator["Pipeline Orchestrator"]
     
     Chat_Module -->|Read| GCS["(Cloud Storage)"]
+    Chat_Module -->|Read/Write State| MongoDB
     Indexing_Orchestrator -->|Read/Write| GCS
 ```
 
@@ -77,7 +79,7 @@ src/
 4.  **Parallel Execution**:
     -   **Visual Track**: Scene Analysis (`scene_analyzer`) -> Scene Indexing (`scene_indexer`).
     -   **Audio Track**: Speech Analysis (`speech_processor`) -> Speech Indexing (`speech_indexer`).
-5.  **Persist**: 생성된 모든 Artifacts와 Vector DB를 스토리지에 업로드.
+5.  **Persist**: 생성된 Artifacts와 Vector DB를 스토리지에 업로드.
 
 ### 2.2 Server & Chat Module
 
