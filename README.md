@@ -91,3 +91,8 @@ src/
 -   **GCPVideoRepository**: 스토리지 파일 입출력 전담. Artifact 이름 규칙 관리.
 -   **VectorDB / SpeechVectorDB**: FAISS 라이브러리 래퍼. 인덱스 생성, 저장, 로드, 검색 기능 캡슐화.
 
+# 3. Demo
+
+https://github.com/user-attachments/assets/645a1769-fbdb-43cd-92e1-138da712e68d
+
+
