@@ -20,6 +20,13 @@ def get_mongo_client() -> AsyncIOMotorClient:
         _client = AsyncIOMotorClient(settings.MONGO_URI)
     return _client
 
+def get_client() -> AsyncIOMotorClient:
+    """
+    Get MongoDB client (for transactions).
+    Alias for get_mongo_client.
+    """
+    return get_mongo_client()
+
 def get_db() -> AsyncIOMotorDatabase:
     """
     Get the default database instance.

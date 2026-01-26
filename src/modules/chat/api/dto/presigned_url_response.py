@@ -1,7 +1,6 @@
 from pydantic import BaseModel
 
-class IndexingResponse(BaseModel):
+class PresignedUrlResponse(BaseModel):
     project_id: str
     video_id: str
-    status: str
-    message: str
+    url: str

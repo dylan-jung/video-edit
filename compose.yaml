@@ -25,8 +25,6 @@ services:
       context: .
       dockerfile: Dockerfile.worker
     container_name: video-edit-worker
-    ports:
-      - "8001:8080" # Map host 8001 to container 8080. Useful for health checks.
     environment:
       - MONGO_URI=mongodb://mongo:27017
       - DB_NAME=${DB_NAME}

@@ -19,6 +19,5 @@ COPY . .
 # Set Python path to root
 ENV PYTHONPATH=/app
 
-# Run the web service on container startup.
-# Port 8080 is the default for Cloud Run
-CMD ["uvicorn", "src.modules.indexing.main:app", "--host", "0.0.0.0", "--port", "8080"]
+# Run the pure Python worker
+CMD ["python", "-m", "src.modules.indexing.main"]

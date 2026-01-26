@@ -19,7 +19,8 @@ from src.modules.indexing.application.ports.speech_processor_port import (
     SpeechProcessorPort,
 )
 from src.modules.indexing.application.ports.embedding_port import EmbeddingPort
-from src.modules.indexing.application.ports.job_repository_port import JobRepositoryPort
+from src.modules.indexing.application.ports.video_repository_port import VideoRepositoryPort as IndexingVideoRepositoryPort
+from src.modules.indexing.application.ports.outbox_repository_port import OutboxRepositoryPort
 
 # Adapters
 from src.modules.indexing.infrastructure.adapters.openai_scene_analyzer import (
@@ -33,8 +34,11 @@ from src.shared.infrastructure.ai.openai_embedding_service import (
 )
 from src.modules.indexing.infrastructure.indexing.scene_indexer import SceneIndexer
 from src.modules.indexing.infrastructure.indexing.speech_indexer import SpeechIndexer
-from src.modules.indexing.infrastructure.repositories.mongo_job_repository import (
-    MongoIndexingJobRepository,
+from src.modules.indexing.infrastructure.repositories.mongo_video_repository import (
+    MongoVideoRepository,
+)
+from src.modules.indexing.infrastructure.repositories.mongo_outbox_repository import (
+    MongoOutboxRepository,
 )
 
 from src.shared.infrastructure.db.mongo import get_db
@@ -83,8 +87,21 @@ def get_speech_indexer() -> SpeechIndexer:
 
 
 @lru_cache
-def get_indexing_job_repository() -> JobRepositoryPort:
-    return MongoIndexingJobRepository(get_db())
+def get_video_repository() -> IndexingVideoRepositoryPort:
+    """인덱싱 모듈용 비디오 저장소"""
+    return MongoVideoRepository(get_db())
+
+
+@lru_cache
+def get_outbox_repository() -> OutboxRepositoryPort:
+    """Outbox 저장소"""
+    return MongoOutboxRepository(get_db())
+
+
+def get_db_client():
+    """MongoDB 클라이언트 (트랜잭션용)"""
+    from src.shared.infrastructure.db.mongo import get_client
+    return get_client()
 
 
 @lru_cache
